@@ -44,6 +44,20 @@ function setupEventListeners() {
     }
   });
 
+  // Shortcut buttons (/cross, <-)
+  document.querySelectorAll('.shortcut-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const insertText = btn.dataset.insert;
+      const cursorPos = messageInput.selectionStart;
+      const textBefore = messageInput.value.substring(0, cursorPos);
+      const textAfter = messageInput.value.substring(cursorPos);
+
+      messageInput.value = textBefore + insertText + textAfter;
+      messageInput.focus();
+      messageInput.selectionStart = messageInput.selectionEnd = cursorPos + insertText.length;
+    });
+  });
+
   // Mention buttons - insert @AI into textarea
   document.querySelectorAll('.mention-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -148,9 +162,9 @@ async function handleSend() {
   messageInput.value = '';
 
   try {
-    // If cross-reference (2+ mentions), handle specially
+    // If cross-reference, handle specially
     if (parsed.crossRef) {
-      log(`Cross-reference: asking ${parsed.targetAIs.join(', ')} about ${parsed.sourceAI}'s response`);
+      log(`Cross-reference: ${parsed.targetAIs.join(', ')} <- ${parsed.sourceAIs.join(', ')}`);
       await handleCrossReference(parsed);
     } else {
       // Send to target(s)
@@ -168,36 +182,42 @@ async function handleSend() {
 }
 
 function parseMessage(message) {
-  // Pattern: @AI mentions
+  // Check for /cross command first: /cross @targets <- @sources message
+  const crossCommandPattern = /^\/cross\s+(.+?)\s*<-\s*(.+?)\s+(.+)$/is;
+  const crossMatch = message.match(crossCommandPattern);
+
+  if (crossMatch) {
+    const targetsPart = crossMatch[1];  // e.g., "@Claude @Gemini"
+    const sourcesPart = crossMatch[2];  // e.g., "@ChatGPT"
+    const actualMessage = crossMatch[3]; // The actual message to send
+
+    // Extract AI names from targets and sources
+    const mentionPattern = /@(claude|chatgpt|gemini)/gi;
+    const targetMatches = [...targetsPart.matchAll(mentionPattern)];
+    const sourceMatches = [...sourcesPart.matchAll(mentionPattern)];
+
+    const targetAIs = [...new Set(targetMatches.map(m => m[1].toLowerCase()))];
+    const sourceAIs = [...new Set(sourceMatches.map(m => m[1].toLowerCase()))];
+
+    if (targetAIs.length > 0 && sourceAIs.length > 0) {
+      return {
+        crossRef: true,
+        mentions: [...targetAIs, ...sourceAIs],
+        targetAIs,
+        sourceAIs,  // Now supports multiple sources
+        originalMessage: actualMessage  // Just the message part, not the command
+      };
+    }
+  }
+
+  // Fallback: Pattern-based detection for @ mentions
   const mentionPattern = /@(claude|chatgpt|gemini)/gi;
   const matches = [...message.matchAll(mentionPattern)];
 
   // Get unique mentions (lowercase)
   const mentions = [...new Set(matches.map(m => m[1].toLowerCase()))];
 
-  // If 2+ different AIs mentioned, check for cross-reference
-  if (mentions.length >= 2) {
-    // Keywords that indicate "evaluate someone's response"
-    const evalKeywords = /评价|看看|怎么样|怎么看|如何|讲的|说的|回答|赞同|同意|分析|认为|观点|看法|意见|evaluate|think of|opinion|review|agree|analysis/i;
-
-    // Check if this is a cross-reference (asking about another AI's response)
-    if (evalKeywords.test(message)) {
-      // The last mentioned AI is the source (being evaluated)
-      // All others are targets (doing the evaluation)
-      const sourceAI = matches[matches.length - 1][1].toLowerCase();
-      const targetAIs = mentions.filter(ai => ai !== sourceAI);
-
-      return {
-        crossRef: true,
-        mentions,
-        targetAIs,  // Multiple targets possible
-        sourceAI,
-        originalMessage: message
-      };
-    }
-  }
-
-  // Single mention or no cross-reference keywords = just send to mentioned AIs
+  // Single mention or multiple = just send to mentioned AIs (no cross-reference)
   return {
     crossRef: false,
     mentions,
@@ -206,20 +226,27 @@ function parseMessage(message) {
 }
 
 async function handleCrossReference(parsed) {
-  // First, get the source AI's latest response
-  const sourceResponse = await getLatestResponse(parsed.sourceAI);
+  // Get responses from all source AIs
+  const sourceResponses = [];
 
-  if (!sourceResponse) {
-    log(`Could not get ${parsed.sourceAI}'s response`, 'error');
-    return;
+  for (const sourceAI of parsed.sourceAIs) {
+    const response = await getLatestResponse(sourceAI);
+    if (!response) {
+      log(`Could not get ${sourceAI}'s response`, 'error');
+      return;
+    }
+    sourceResponses.push({ ai: sourceAI, content: response });
   }
 
-  // Build the full message with XML tags for clear separation
-  const fullMessage = `${parsed.originalMessage}
+  // Build the full message with XML tags for each source
+  let fullMessage = parsed.originalMessage + '\n';
 
-<${parsed.sourceAI}_response>
-${sourceResponse}
-</${parsed.sourceAI}_response>`;
+  for (const source of sourceResponses) {
+    fullMessage += `
+<${source.ai}_response>
+${source.content}
+</${source.ai}_response>`;
+  }
 
   // Send to all target AIs
   for (const targetAI of parsed.targetAIs) {

@@ -40,6 +40,10 @@
     </section>
 
     <section class="input-section">
+      <div class="shortcut-buttons">
+        <button class="shortcut-btn" id="cross-btn" data-insert="/cross ">/cross</button>
+        <button class="shortcut-btn" id="arrow-btn" data-insert=" <- "><-</button>
+      </div>
       <div class="mention-buttons">
         <span class="mention-label">@</span>
         <button class="mention-btn claude" data-mention="@Claude">Claude</button>
@@ -48,7 +52,7 @@
       </div>
       <textarea
         id="message-input"
-        placeholder="Enter your message...&#10;&#10;Click @ buttons above or type @Claude @ChatGPT @Gemini"
+        placeholder="Enter your message...&#10;&#10;Use /cross for cross-reference:&#10;/cross @Claude @Gemini <- @ChatGPT 评价一下"
         rows="6"
       ></textarea>
       <button id="send-btn">Send</button>
@@ -57,9 +61,10 @@
     <section class="help">
       <details>
         <summary>Cross-reference syntax</summary>
+        <p class="syntax-title">/cross @目标 <- @来源 消息</p>
         <ul>
-          <li><code>@Claude evaluate @ChatGPT</code></li>
-          <li><code>@Gemini what do you think of @Claude's answer</code></li>
+          <li><code>/cross @Claude @Gemini <- @ChatGPT 评价一下</code><br><small>Claude 和 Gemini 评价 ChatGPT</small></li>
+          <li><code>/cross @Claude <- @ChatGPT @Gemini 对比一下</code><br><small>Claude 对比 ChatGPT 和 Gemini</small></li>
         </ul>
       </details>
     </section>

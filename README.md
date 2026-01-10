@@ -50,16 +50,31 @@
 - 点击 @ 按钮快速插入 AI 名称
 - 或手动输入：`@Claude 你怎么看这个问题？`
 
-**交叉引用**
-让一个 AI 评价另一个 AI 的回答：
+**交叉引用 `/cross` 命令**
+
+使用明确的语法让 AI 之间互相评价：
 
 ```
-@Claude 评价一下 @ChatGPT 的回答
+/cross @目标 <- @来源 消息
 ```
 
-系统会自动获取 ChatGPT 的最新回复，附加到消息中发送给 Claude。
+- **@目标**：接收消息的 AI（评价者）
+- **@来源**：获取回复的 AI（被评价者）
+- **消息**：你想说的话
 
-支持的评价关键词：评价、看看、怎么样、怎么看、如何、讲的、说的、回答、evaluate、think of、opinion、review
+**示例 1：两个 AI 评价一个 AI**
+```
+/cross @Claude @Gemini <- @ChatGPT 你们评价一下这个回答
+```
+→ 获取 ChatGPT 的回复，发送给 Claude 和 Gemini
+
+**示例 2：一个 AI 对比两个 AI**
+```
+/cross @Claude <- @ChatGPT @Gemini 对比一下这两个回答
+```
+→ 获取 ChatGPT 和 Gemini 的回复，发送给 Claude
+
+点击 `/cross` 和 `<-` 按钮可快速插入命令
 
 ### Discussion Mode（讨论模式）
 

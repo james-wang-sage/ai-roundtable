@@ -107,6 +107,29 @@ header .subtitle {
   gap: 8px;
 }
 
+/* Shortcut Buttons (/cross, <-) */
+.shortcut-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.shortcut-btn {
+  padding: 4px 12px;
+  border: 1px solid #6366f1;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: 'Monaco', 'Consolas', monospace;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.shortcut-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+}
+
 /* Mention Buttons */
 .mention-buttons {
   display: flex;
@@ -230,6 +253,23 @@ header .subtitle {
   border-radius: 4px;
   font-family: 'Monaco', 'Consolas', monospace;
   font-size: 11px;
+}
+
+.help .syntax-title {
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 12px;
+  color: #6366f1;
+  margin: 8px 0;
+  padding: 6px 10px;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 4px;
+  border-left: 2px solid #6366f1;
+}
+
+.help small {
+  color: #666;
+  display: block;
+  margin-top: 2px;
 }
 
 /* Log Section */
