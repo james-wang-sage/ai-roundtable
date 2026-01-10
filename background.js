@@ -39,8 +39,8 @@ async function handleMessage(message, sender) {
       return await sendMessageToAI(message.aiType, message.message);
 
     case 'GET_RESPONSE':
-      const responses = await getStoredResponses();
-      return { content: responses[message.aiType] };
+      // Query content script directly for real-time response (not from storage)
+      return await getResponseFromContentScript(message.aiType);
 
     case 'RESPONSE_CAPTURED':
       // Content script captured a response
@@ -59,6 +59,29 @@ async function handleMessage(message, sender) {
 
     default:
       return { error: 'Unknown message type' };
+  }
+}
+
+async function getResponseFromContentScript(aiType) {
+  try {
+    const tab = await findAITab(aiType);
+    if (!tab) {
+      // Fallback to stored response if tab not found
+      const responses = await getStoredResponses();
+      return { content: responses[aiType] };
+    }
+
+    // Query content script for real-time DOM content
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      type: 'GET_LATEST_RESPONSE'
+    });
+
+    return { content: response?.content || null };
+  } catch (err) {
+    // Fallback to stored response on error
+    console.log('[AI Panel] Failed to get response from content script:', err.message);
+    const responses = await getStoredResponses();
+    return { content: responses[aiType] };
   }
 }
 
