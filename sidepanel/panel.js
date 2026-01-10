@@ -178,7 +178,7 @@ function parseMessage(message) {
   // If 2+ different AIs mentioned, check for cross-reference
   if (mentions.length >= 2) {
     // Keywords that indicate "evaluate someone's response"
-    const evalKeywords = /评价|看看|怎么样|怎么看|如何|讲的|说的|回答|evaluate|think of|opinion|review/i;
+    const evalKeywords = /评价|看看|怎么样|怎么看|如何|讲的|说的|回答|赞同|同意|分析|认为|观点|看法|意见|evaluate|think of|opinion|review|agree|analysis/i;
 
     // Check if this is a cross-reference (asking about another AI's response)
     if (evalKeywords.test(message)) {
