@@ -4,6 +4,10 @@
   padding: 0;
 }
 
+html {
+  height: 100%;
+}
+
 /* Axton Brand: Deep Space Violet Edition */
 :root {
   --deep-space-violet: #2F2B42;
@@ -23,6 +27,8 @@ body {
   background: var(--deep-space-violet);
   color: var(--text-secondary);
   min-width: 280px;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .container {
@@ -30,12 +36,15 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 header {
   text-align: center;
   padding-bottom: 12px;
   border-bottom: 2px solid var(--electric-cyan);
+  flex-shrink: 0;
 }
 
 header h1 {
@@ -55,6 +64,7 @@ header .subtitle {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .target-label {
@@ -121,6 +131,8 @@ header .subtitle {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Action & Shortcut Buttons Row */
@@ -128,6 +140,9 @@ header .subtitle {
   display: flex;
   gap: 6px;
   align-items: center;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .action-select {
@@ -222,8 +237,9 @@ header .subtitle {
   background: var(--dark-card);
   color: var(--text-secondary);
   font-size: 14px;
-  resize: vertical;
-  min-height: 120px;
+  resize: none;
+  flex: 1;
+  min-height: 150px;
 }
 
 #message-input:focus {
@@ -268,6 +284,7 @@ header .subtitle {
 .help {
   font-size: 12px;
   color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .help summary {
@@ -324,16 +341,22 @@ header .subtitle {
 .log {
   border-top: 1px solid var(--border-subtle);
   padding-top: 12px;
+  flex-shrink: 0;
+  max-height: 180px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .log h3 {
   font-size: 12px;
   color: var(--text-muted);
   margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
 #log-container {
-  max-height: 200px;
+  flex: 1;
   overflow-y: auto;
   font-size: 11px;
   font-family: 'Monaco', 'Consolas', monospace;
@@ -358,6 +381,15 @@ header .subtitle {
   margin-right: 8px;
 }
 
+/* Normal Mode Layout */
+#normal-mode {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 8px;
+}
+
 /* Utility */
 .hidden {
   display: none !important;
@@ -370,6 +402,7 @@ header .subtitle {
   background: var(--dark-card);
   padding: 4px;
   border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .mode-btn {
@@ -690,9 +723,10 @@ header .subtitle {
   text-align: center;
   font-size: 11px;
   color: var(--text-muted);
-  padding-top: 16px;
+  padding-top: 12px;
   border-top: 1px solid var(--border-subtle);
-  margin-top: 8px;
+  margin-top: auto;
+  flex-shrink: 0;
 }
 
 .copyright a {

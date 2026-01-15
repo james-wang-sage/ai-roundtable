@@ -49,6 +49,7 @@
           <option value="supplement">补充</option>
           <option value="compare">对比</option>
         </select>
+        <button class="shortcut-btn" id="mutual-btn" data-insert="/mutual ">/mutual</button>
         <button class="shortcut-btn" id="cross-btn" data-insert="/cross ">/cross</button>
         <button class="shortcut-btn" id="arrow-btn" data-insert=" <- "><-</button>
       </div>
@@ -60,7 +61,7 @@
       </div>
       <textarea
         id="message-input"
-        placeholder="Enter your message...&#10;&#10;Example: @Claude 评价一下 @ChatGPT&#10;3 AIs: /cross @Claude @Gemini <- @ChatGPT 评价"
+        placeholder="Enter your message...&#10;&#10;互评: /mutual（基于当前回复）&#10;单向: @Claude 评价一下 @ChatGPT"
         rows="6"
       ></textarea>
       <button id="send-btn">Send</button>
@@ -68,14 +69,16 @@
 
     <section class="help">
       <details>
-        <summary>Cross-reference 帮助</summary>
-        <p class="help-subtitle">两个 AI（自动检测）</p>
+        <summary>命令帮助</summary>
+        <p class="help-subtitle">互评 /mutual（推荐）</p>
         <ul>
-          <li><code>@Claude 评价一下 @ChatGPT</code><br><small>最后@的是来源</small></li>
+          <li><code>/mutual</code><br><small>让所有选中的 AI 互评当前回复</small></li>
+          <li><code>/mutual 重点分析优缺点</code><br><small>可加自定义评价提示</small></li>
         </ul>
-        <p class="help-subtitle">三个 AI（用 /cross 命令）</p>
+        <p class="help-subtitle">单向引用</p>
         <ul>
-          <li><code>/cross @Claude @Gemini <- @ChatGPT 评价</code></li>
+          <li><code>@Claude 评价一下 @ChatGPT</code></li>
+          <li><code>/cross @Claude @Gemini <- @ChatGPT</code></li>
         </ul>
       </details>
     </section>

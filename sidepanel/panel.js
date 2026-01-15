@@ -34,6 +34,7 @@ let discussionState = {
   roundType: null  // 'initial', 'cross-eval', 'counter'
 };
 
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   checkConnectedTabs();
@@ -195,8 +196,17 @@ async function handleSend() {
   messageInput.value = '';
 
   try {
+    // If mutual review, handle specially
+    if (parsed.mutual) {
+      if (targets.length < 2) {
+        log('Mutual review requires at least 2 AIs selected', 'error');
+      } else {
+        log(`Mutual review: ${targets.join(', ')}`);
+        await handleMutualReview(targets, parsed.prompt);
+      }
+    }
     // If cross-reference, handle specially
-    if (parsed.crossRef) {
+    else if (parsed.crossRef) {
       log(`Cross-reference: ${parsed.targetAIs.join(', ')} <- ${parsed.sourceAIs.join(', ')}`);
       await handleCrossReference(parsed);
     } else {
@@ -215,6 +225,21 @@ async function handleSend() {
 }
 
 function parseMessage(message) {
+  // Check for /mutual command: /mutual [optional prompt]
+  // Triggers mutual review based on current responses (no new topic needed)
+  const trimmedMessage = message.trim();
+  if (trimmedMessage.toLowerCase() === '/mutual' || trimmedMessage.toLowerCase().startsWith('/mutual ')) {
+    // Extract everything after "/mutual " as the prompt
+    const prompt = trimmedMessage.length > 7 ? trimmedMessage.substring(7).trim() : '';
+    return {
+      mutual: true,
+      prompt: prompt || '请评价以上观点。你同意什么？不同意什么？有什么补充？',
+      crossRef: false,
+      mentions: [],
+      originalMessage: message
+    };
+  }
+
   // Check for /cross command first: /cross @targets <- @sources message
   // Use this for complex cases (3 AIs, or when you want to be explicit)
   if (message.trim().toLowerCase().startsWith('/cross ')) {
@@ -317,6 +342,52 @@ ${source.content}
   for (const targetAI of parsed.targetAIs) {
     await sendToAI(targetAI, fullMessage);
   }
+}
+
+// ============================================
+// Mutual Review Functions
+// ============================================
+
+async function handleMutualReview(participants, prompt) {
+  // Get current responses from all participants
+  const responses = {};
+
+  log(`[Mutual] Fetching responses from ${participants.join(', ')}...`);
+
+  for (const ai of participants) {
+    const response = await getLatestResponse(ai);
+    if (!response || response.trim().length === 0) {
+      log(`[Mutual] Could not get ${ai}'s response - make sure ${ai} has replied first`, 'error');
+      return;
+    }
+    responses[ai] = response;
+    log(`[Mutual] Got ${ai}'s response (${response.length} chars)`);
+  }
+
+  log(`[Mutual] All responses collected. Sending cross-evaluations...`);
+
+  // For each AI, send them the responses from all OTHER AIs
+  for (const targetAI of participants) {
+    const otherAIs = participants.filter(ai => ai !== targetAI);
+
+    // Build message with all other AIs' responses
+    let evalMessage = `以下是其他 AI 的观点：\n`;
+
+    for (const sourceAI of otherAIs) {
+      evalMessage += `
+<${sourceAI}_response>
+${responses[sourceAI]}
+</${sourceAI}_response>
+`;
+    }
+
+    evalMessage += `\n${prompt}`;
+
+    log(`[Mutual] Sending to ${targetAI}: ${otherAIs.join('+')} responses + prompt`);
+    await sendToAI(targetAI, evalMessage);
+  }
+
+  log(`[Mutual] Complete! All ${participants.length} AIs received cross-evaluations`, 'success');
 }
 
 async function getLatestResponse(aiType) {
