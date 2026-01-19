@@ -163,13 +163,19 @@ async function startDebate() {
 2. 每个关键论据必须附上来源URL
 3. 格式：[论据内容] (来源: URL)
 
+【核心要求 - 思考与整合】
+❌ 禁止：简单罗列论据（如"论据1... 论据2... 论据3..."）
+✅ 必须：展示你的推理过程，将多个论据有机整合，形成连贯的论证链
+
 请进行立论陈述。要求：
 1. 明确阐述你的核心观点
 2. 提供至少 3 个论据，每个论据必须有URL来源
-3. 逻辑清晰，论证有力
-4. 篇幅控制在 300-500 字
+3. 【关键】必须包含"推理/分析"段落，解释这些论据如何相互支持、共同指向你的结论
+4. 逻辑清晰，论证有力
+5. 篇幅控制在 300-500 字
 
-⚠️ 无来源的论据将被视为无效，严重影响评分！`;
+⚠️ 无来源的论据将被视为无效！
+⚠️ 仅罗列论据而无思考整合，将严重扣分！`;
 
   const conPrompt = `你是一场正式辩论的反方辩手。
 
@@ -182,13 +188,19 @@ async function startDebate() {
 2. 每个关键论据必须附上来源URL
 3. 格式：[论据内容] (来源: URL)
 
+【核心要求 - 思考与整合】
+❌ 禁止：简单罗列论据（如"论据1... 论据2... 论据3..."）
+✅ 必须：展示你的推理过程，将多个论据有机整合，形成连贯的论证链
+
 请进行立论陈述。要求：
 1. 明确阐述你的核心观点
 2. 提供至少 3 个论据，每个论据必须有URL来源
-3. 逻辑清晰，论证有力
-4. 篇幅控制在 300-500 字
+3. 【关键】必须包含"推理/分析"段落，解释这些论据如何相互支持、共同指向你的结论
+4. 逻辑清晰，论证有力
+5. 篇幅控制在 300-500 字
 
-⚠️ 无来源的论据将被视为无效，严重影响评分！`;
+⚠️ 无来源的论据将被视为无效！
+⚠️ 仅罗列论据而无思考整合，将严重扣分！`;
 
   await sendToAI(proAI, proPrompt);
   await sendToAI(conAI, conPrompt);
@@ -333,15 +345,21 @@ ${conResponse}
 2. 新论据必须附上URL来源
 3. 指出对方来源的问题（如有）
 
+【核心要求 - 思考与整合】
+❌ 禁止：逐条反驳后简单堆砌（如"反驳1... 反驳2..."）
+✅ 必须：展示批判性思维，分析对方论证的结构性缺陷，整合你的反驳形成系统性攻击
+
 本轮重点：${roundFocus[roundNum]}
 
 请进行驳论：
 1. 验证并质疑对方引用的来源
 2. 用有URL来源的数据反驳对方
-3. 进一步强化你的立场
-4. 篇幅控制在 300-500 字
+3. 【关键】必须包含"分析/推理"段落，解释为什么你的反驳能够系统性地瓦解对方论证
+4. 进一步强化你的立场
+5. 篇幅控制在 300-500 字
 
-⚠️ 无来源的论据将被视为无效！`;
+⚠️ 无来源的论据将被视为无效！
+⚠️ 仅罗列反驳而无深度分析，将严重扣分！`;
 
     conPrompt = `这是辩论的驳论阶段（第 ${roundNum} 轮，共 3 轮）。
 
@@ -358,15 +376,21 @@ ${proResponse}
 2. 新论据必须附上URL来源
 3. 指出对方来源的问题（如有）
 
+【核心要求 - 思考与整合】
+❌ 禁止：逐条反驳后简单堆砌（如"反驳1... 反驳2..."）
+✅ 必须：展示批判性思维，分析对方论证的结构性缺陷，整合你的反驳形成系统性攻击
+
 本轮重点：${roundFocus[roundNum]}
 
 请进行驳论：
 1. 验证并质疑对方引用的来源
 2. 用有URL来源的数据反驳对方
-3. 进一步强化你的立场
-4. 篇幅控制在 300-500 字
+3. 【关键】必须包含"分析/推理"段落，解释为什么你的反驳能够系统性地瓦解对方论证
+4. 进一步强化你的立场
+5. 篇幅控制在 300-500 字
 
-⚠️ 无来源的论据将被视为无效！`;
+⚠️ 无来源的论据将被视为无效！
+⚠️ 仅罗列反驳而无深度分析，将严重扣分！`;
   } else if (phaseName === 'closing') {
     // Build full debate history for closing
     const allHistory = debateState.history.map(h => {
@@ -485,7 +509,7 @@ async function requestVerdict() {
   }).join('\n\n' + '='.repeat(50) + '\n\n');
 
   const getVerdictPrompt = (judgeAI) => `你现在的身份是：【首席风险官 (CRO) & 财务审计师】。
-你的任务不是选出辩论的胜者，而是为了“投资决策”或“生命安全”进行尽职调查 (Due Diligence)。
+你的任务不是选出辩论的胜者，而是为了"投资决策"或"生命安全"进行尽职调查 (Due Diligence)。
 
 ❌ 拒绝模棱两可。
 ❌ 拒绝盲目信任。
@@ -505,25 +529,34 @@ ${'='.repeat(50)}
 第一步：【来源核实】(Source Verification)
 请对双方引用的关键URL进行网络搜索验证。
 - 只有官方/权威来源（如论文、政府报告、知名媒体）才算有效。
-- 博客、论坛、社交媒体视为“低信度”。
+- 博客、论坛、社交媒体视为"低信度"。
 - 必须列出：[真实] / [虚假] / [断章取义] / [无效链接] 的具体情况。
 
-第二步：【致命风险评估】(Critical Risk Assessment)
-如果根据本次辩论的结果进行投资或决策，最大的风险是什么？
-是否存在双方都忽略的“黑天鹅”因素？
+第二步：【论证质量评估】(Reasoning Quality Assessment) ⭐新增
+评估双方的"思考整合"能力：
+- 是否仅仅罗列论据，还是展示了深度推理？
+- 论据之间是否有逻辑连接，形成连贯的论证链？
+- 是否有"分析/推理"段落解释论据如何支持结论？
+⚠️ 仅罗列论据而无思考整合的一方，得分上限为70分！
 
-第三步：【最终裁决】
-只有在证据确凿（Sources Verified & Strong Logic）的情况下才能判定一方胜出。
-如果双方证据都薄弱，必须判定为“资料不足/高风险”。
+第三步：【致命风险评估】(Critical Risk Assessment)
+如果根据本次辩论的结果进行投资或决策，最大的风险是什么？
+是否存在双方都忽略的"黑天鹅"因素？
+
+第四步：【最终裁决】
+只有在证据确凿（Sources Verified & Strong Logic & Good Reasoning）的情况下才能判定一方胜出。
+如果双方证据都薄弱或缺乏深度思考，必须判定为"资料不足/高风险"。
 
 请在回复的最后，严格按以下格式输出结果（不要使用Markdown代码块）：
 
 ===审计结果===
 胜方：[正方/反方/平局/资料不足]
-正方得分：[0-100] (低于60分为不及格)
-反方得分：[0-100] (低于60分为不及格)
+正方得分：[0-100] (低于60分为不及格，仅罗列论据上限70分)
+反方得分：[0-100] (低于60分为不及格，仅罗列论据上限70分)
 来源可信度-正方：[1-5]星 (1-2星为高风险)
 来源可信度-反方：[1-5]星 (1-2星为高风险)
+思考整合-正方：[有/无] (无深度推理则标记"无")
+思考整合-反方：[有/无] (无深度推理则标记"无")
 致命风险：[一句话描述最大风险]
 ===============`;
 
@@ -620,7 +653,7 @@ function processConsensusVerdict() {
   // --- STRICT RELIABILITY CHECK (The "Veto" Logic) ---
   let riskFlag = false;
   let riskReason = '';
-  
+
   // 1. Check for Low Credibility Sources (<= 2 stars)
   for (const judge of validJudges) {
     const v = parsedVerdicts[judge];
@@ -631,10 +664,25 @@ function processConsensusVerdict() {
     }
   }
 
-  // 2. Check for Low Scores (< 60 is failing, < 75 is weak)
+  // 2. Check for Missing Reasoning Integration (新增：思考整合检查)
+  if (!riskFlag) {
+    let proNoReasoning = 0, conNoReasoning = 0;
+    for (const judge of validJudges) {
+      const v = parsedVerdicts[judge];
+      if (v.proReasoning === '无') proNoReasoning++;
+      if (v.conReasoning === '无') conNoReasoning++;
+    }
+    // If majority of judges say both sides lack reasoning, flag it
+    if (proNoReasoning >= Math.ceil(totalValid / 2) && conNoReasoning >= Math.ceil(totalValid / 2)) {
+      riskFlag = true;
+      riskReason = '双方均缺乏思考整合 (仅罗列论据，无深度推理)';
+    }
+  }
+
+  // 3. Check for Low Scores (< 60 is failing, < 75 is weak)
   const avgProScore = validJudges.reduce((s, j) => s + parsedVerdicts[j].proScore, 0) / totalValid;
   const avgConScore = validJudges.reduce((s, j) => s + parsedVerdicts[j].conScore, 0) / totalValid;
-  
+
   if (!riskFlag && avgProScore < 70 && avgConScore < 70) {
     riskFlag = true;
     riskReason = '双方论证质量均未达到决策标准 (<70分)';
@@ -682,6 +730,8 @@ function parseVerdictResult(verdict) {
     conScore: 0,
     proCredibility: 0,
     conCredibility: 0,
+    proReasoning: '无',  // 新增：思考整合评估
+    conReasoning: '无',  // 新增：思考整合评估
     criticalRisk: '无',
     rawText: verdict,
     parseErrors: []
@@ -692,7 +742,7 @@ function parseVerdictResult(verdict) {
     result.parseErrors.push('Missing audit block');
     return result;
   }
-  
+
   const block = blockMatch[1];
   result.valid = true;
 
@@ -711,6 +761,13 @@ function parseVerdictResult(verdict) {
 
   const conCredMatch = block.match(/来源可信度-反方[：:]\s*(\d)/);
   if (conCredMatch) result.conCredibility = parseInt(conCredMatch[1]);
+
+  // 新增：解析思考整合评估
+  const proReasoningMatch = block.match(/思考整合-正方[：:]\s*(有|无)/);
+  if (proReasoningMatch) result.proReasoning = proReasoningMatch[1].trim();
+
+  const conReasoningMatch = block.match(/思考整合-反方[：:]\s*(有|无)/);
+  if (conReasoningMatch) result.conReasoning = conReasoningMatch[1].trim();
 
   const riskMatch = block.match(/致命风险[：:]\s*(.+)/);
   if (riskMatch) result.criticalRisk = riskMatch[1].trim();
@@ -761,8 +818,9 @@ function showConsensusVerdict(parsedVerdicts, consensusWinner, consensusLevel, v
     const v = parsedVerdicts[judge];
     if (v.valid) {
       const isLowCred = v.proCredibility <= 2 || v.conCredibility <= 2;
+      const hasReasoningIssue = v.proReasoning === '无' || v.conReasoning === '无';
       judgeBreakdown += `
-        <div class="judge-verdict ${isLowCred ? 'risk-highlight' : ''}">
+        <div class="judge-verdict ${isLowCred || hasReasoningIssue ? 'risk-highlight' : ''}">
           <div class="judge-header">
             <span class="judge-name">${capitalize(judge)}</span>
             <span class="judge-decision">${v.winner}</span>
@@ -770,6 +828,10 @@ function showConsensusVerdict(parsedVerdicts, consensusWinner, consensusLevel, v
           <div class="judge-metrics">
             <span>得分: ${v.proScore} vs ${v.conScore}</span>
             <span class="${isLowCred ? 'text-danger' : ''}">信度: ⭐${v.proCredibility} vs ⭐${v.conCredibility}</span>
+          </div>
+          <div class="judge-metrics">
+            <span class="${v.proReasoning === '无' ? 'text-danger' : 'text-success'}">思考整合-正: ${v.proReasoning === '有' ? '✓' : '✗'}</span>
+            <span class="${v.conReasoning === '无' ? 'text-danger' : 'text-success'}">思考整合-反: ${v.conReasoning === '有' ? '✓' : '✗'}</span>
           </div>
           <div class="judge-risk">风险提示: ${v.criticalRisk}</div>
         </div>`;
