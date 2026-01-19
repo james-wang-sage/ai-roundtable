@@ -306,7 +306,6 @@ header .subtitle {
   padding: 2px 6px;
   border-radius: 4px;
   font-family: 'Monaco', 'Consolas', monospace;
-  font-size: 11px;
 }
 
 .help .syntax-title {
@@ -1431,4 +1430,77 @@ header .subtitle {
 #new-debate-btn:hover {
   box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
   transform: translateY(-1px);
+}
+
+/* New Reliability Risk Styles */
+
+#verdict-content .consensus-badge.risk_flagged {
+  background: rgba(239, 68, 68, 0.3);
+  color: #ff6b6b;
+  border: 2px solid #ef4444;
+  animation: pulse-red 2s infinite;
+}
+
+#verdict-content .verdict-winner.risk {
+  background: rgba(127, 29, 29, 0.4);
+  color: #fca5a5;
+  border: 1px solid #ef4444;
+}
+
+.risk-alert {
+  background: rgba(239, 68, 68, 0.2);
+  border-left: 4px solid #ef4444;
+  color: #fecaca;
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+#verdict-content .judge-verdict.risk-highlight {
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  background: rgba(127, 29, 29, 0.2);
+}
+
+.text-danger {
+  color: #ef4444 !important;
+  font-weight: bold;
+}
+
+.judge-header {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.judge-metrics {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.judge-risk {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #fca5a5;
+  font-style: italic;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Adjust judge verdict layout for new content */
+#verdict-content .judge-verdict {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+@keyframes pulse-red {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
