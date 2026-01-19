@@ -163,19 +163,27 @@ async function startDebate() {
 2. 每个关键论据必须附上来源URL
 3. 格式：[论据内容] (来源: URL)
 
+【来源质量要求 - 区分一手与二手】
+⚠️ 审计时会严格区分来源等级，影响最终得分！
+✅ 一手来源（高信度）：官方报告、论文、政府数据、公司IR公告、权威机构原文
+⚠️ 二手转述（中信度）：权威媒体（Reuters/CNBC）转述，需注明"据XX报道"
+❌ 低信度来源（扣分）：博客、论坛、聚合站、社交媒体、AI生成内容
+❌ 预测≠事实：投行预测、分析师观点是"预测"，不能当作"已发生的事实"引用
+
 【核心要求 - 思考与整合】
 ❌ 禁止：简单罗列论据（如"论据1... 论据2... 论据3..."）
 ✅ 必须：展示你的推理过程，将多个论据有机整合，形成连贯的论证链
 
 请进行立论陈述。要求：
 1. 明确阐述你的核心观点
-2. 提供至少 3 个论据，每个论据必须有URL来源
+2. 提供至少 3 个论据，优先使用一手来源，每个论据必须有URL
 3. 【关键】必须包含"推理/分析"段落，解释这些论据如何相互支持、共同指向你的结论
 4. 逻辑清晰，论证有力
 5. 篇幅控制在 300-500 字
 
 ⚠️ 无来源的论据将被视为无效！
-⚠️ 仅罗列论据而无思考整合，将严重扣分！`;
+⚠️ 仅罗列论据而无思考整合，将严重扣分！
+⚠️ 大量使用二手转述/低信度来源，将影响来源可信度评分！`;
 
   const conPrompt = `你是一场正式辩论的反方辩手。
 
@@ -188,19 +196,27 @@ async function startDebate() {
 2. 每个关键论据必须附上来源URL
 3. 格式：[论据内容] (来源: URL)
 
+【来源质量要求 - 区分一手与二手】
+⚠️ 审计时会严格区分来源等级，影响最终得分！
+✅ 一手来源（高信度）：官方报告、论文、政府数据、公司IR公告、权威机构原文
+⚠️ 二手转述（中信度）：权威媒体（Reuters/CNBC）转述，需注明"据XX报道"
+❌ 低信度来源（扣分）：博客、论坛、聚合站、社交媒体、AI生成内容
+❌ 预测≠事实：投行预测、分析师观点是"预测"，不能当作"已发生的事实"引用
+
 【核心要求 - 思考与整合】
 ❌ 禁止：简单罗列论据（如"论据1... 论据2... 论据3..."）
 ✅ 必须：展示你的推理过程，将多个论据有机整合，形成连贯的论证链
 
 请进行立论陈述。要求：
 1. 明确阐述你的核心观点
-2. 提供至少 3 个论据，每个论据必须有URL来源
+2. 提供至少 3 个论据，优先使用一手来源，每个论据必须有URL
 3. 【关键】必须包含"推理/分析"段落，解释这些论据如何相互支持、共同指向你的结论
 4. 逻辑清晰，论证有力
 5. 篇幅控制在 300-500 字
 
 ⚠️ 无来源的论据将被视为无效！
-⚠️ 仅罗列论据而无思考整合，将严重扣分！`;
+⚠️ 仅罗列论据而无思考整合，将严重扣分！
+⚠️ 大量使用二手转述/低信度来源，将影响来源可信度评分！`;
 
   await sendToAI(proAI, proPrompt);
   await sendToAI(conAI, conPrompt);
@@ -345,6 +361,13 @@ ${conResponse}
 2. 新论据必须附上URL来源
 3. 指出对方来源的问题（如有）
 
+【来源质量审计 - 攻击对方弱点】
+审计时会严格区分来源等级！你可以攻击对方的来源质量：
+- 对方使用"二手转述"而非一手来源？指出！
+- 对方把"预测"当"事实"引用？揭露！
+- 对方使用低信度来源（博客/聚合站）？质疑！
+同时确保你自己的新论据使用一手来源，避免同样的问题。
+
 【核心要求 - 思考与整合】
 ❌ 禁止：逐条反驳后简单堆砌（如"反驳1... 反驳2..."）
 ✅ 必须：展示批判性思维，分析对方论证的结构性缺陷，整合你的反驳形成系统性攻击
@@ -352,14 +375,15 @@ ${conResponse}
 本轮重点：${roundFocus[roundNum]}
 
 请进行驳论：
-1. 验证并质疑对方引用的来源
-2. 用有URL来源的数据反驳对方
+1. 验证并质疑对方引用的来源（一手/二手/预测/事实？）
+2. 用有URL来源的一手数据反驳对方
 3. 【关键】必须包含"分析/推理"段落，解释为什么你的反驳能够系统性地瓦解对方论证
 4. 进一步强化你的立场
 5. 篇幅控制在 300-500 字
 
 ⚠️ 无来源的论据将被视为无效！
-⚠️ 仅罗列反驳而无深度分析，将严重扣分！`;
+⚠️ 仅罗列反驳而无深度分析，将严重扣分！
+⚠️ 使用低信度来源将影响你的可信度评分！`;
 
     conPrompt = `这是辩论的驳论阶段（第 ${roundNum} 轮，共 3 轮）。
 
@@ -376,6 +400,13 @@ ${proResponse}
 2. 新论据必须附上URL来源
 3. 指出对方来源的问题（如有）
 
+【来源质量审计 - 攻击对方弱点】
+审计时会严格区分来源等级！你可以攻击对方的来源质量：
+- 对方使用"二手转述"而非一手来源？指出！
+- 对方把"预测"当"事实"引用？揭露！
+- 对方使用低信度来源（博客/聚合站）？质疑！
+同时确保你自己的新论据使用一手来源，避免同样的问题。
+
 【核心要求 - 思考与整合】
 ❌ 禁止：逐条反驳后简单堆砌（如"反驳1... 反驳2..."）
 ✅ 必须：展示批判性思维，分析对方论证的结构性缺陷，整合你的反驳形成系统性攻击
@@ -383,14 +414,15 @@ ${proResponse}
 本轮重点：${roundFocus[roundNum]}
 
 请进行驳论：
-1. 验证并质疑对方引用的来源
-2. 用有URL来源的数据反驳对方
+1. 验证并质疑对方引用的来源（一手/二手/预测/事实？）
+2. 用有URL来源的一手数据反驳对方
 3. 【关键】必须包含"分析/推理"段落，解释为什么你的反驳能够系统性地瓦解对方论证
 4. 进一步强化你的立场
 5. 篇幅控制在 300-500 字
 
 ⚠️ 无来源的论据将被视为无效！
-⚠️ 仅罗列反驳而无深度分析，将严重扣分！`;
+⚠️ 仅罗列反驳而无深度分析，将严重扣分！
+⚠️ 使用低信度来源将影响你的可信度评分！`;
   } else if (phaseName === 'closing') {
     // Build full debate history for closing
     const allHistory = debateState.history.map(h => {
@@ -547,7 +579,10 @@ ${'='.repeat(50)}
 只有在证据确凿（Sources Verified & Strong Logic & Good Reasoning）的情况下才能判定一方胜出。
 如果双方证据都薄弱或缺乏深度思考，必须判定为"资料不足/高风险"。
 
-请在回复的最后，严格按以下格式输出结果（不要使用Markdown代码块）：
+⚠️ 【极重要】请在回复的最后，严格按以下格式输出结果。
+- 不要使用Markdown代码块
+- 必须包含开头 ===审计结果=== 和结尾 ===============
+- 所有字段必须填写，不能省略
 
 ===审计结果===
 胜方：[正方/反方/平局/资料不足]
@@ -558,7 +593,9 @@ ${'='.repeat(50)}
 思考整合-正方：[有/无] (无深度推理则标记"无")
 思考整合-反方：[有/无] (无深度推理则标记"无")
 致命风险：[一句话描述最大风险]
-===============`;
+===============
+
+⚠️ 如果缺少结尾的 =============== 将导致审计结果无效！`;
 
   log(`[审计] 已启动多重风险审查机制 (Claude, ChatGPT, Gemini)...`);
 
@@ -737,40 +774,62 @@ function parseVerdictResult(verdict) {
     parseErrors: []
   };
 
-  const blockMatch = verdict.match(/={3,}审计结果={3,}([\s\S]*?)={10,}/);
+  // 尝试匹配完整格式（带结束标记）
+  let blockMatch = verdict.match(/={3,}审计结果={3,}([\s\S]*?)={10,}/);
+
+  // 如果没有结束标记，尝试宽松匹配（从 ===审计结果=== 到文末）
+  if (!blockMatch) {
+    blockMatch = verdict.match(/={3,}审计结果={3,}([\s\S]*?)$/);
+  }
+
   if (!blockMatch) {
     result.parseErrors.push('Missing audit block');
     return result;
   }
 
   const block = blockMatch[1];
-  result.valid = true;
 
-  // Extract fields
-  const winnerMatch = block.match(/胜方[：:]\s*(.+)/);
-  if (winnerMatch) result.winner = winnerMatch[1].trim();
+  // Extract fields - 容忍 Markdown 格式 (**字段**:, - 字段:, * 字段: 等)
+  // 每个正则支持: 字段:, **字段**:, - 字段:, * **字段**: 等变体
 
-  const proScoreMatch = block.match(/正方得分[：:]\s*(\d+)/);
+  // 胜方
+  const winnerMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?胜方(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(.+?)(?:\*{1,2})?$/m);
+  if (winnerMatch) result.winner = winnerMatch[1].trim().replace(/\*+/g, '');
+
+  // 只要有胜方字段，就认为有效
+  const hasMinimumFields = winnerMatch !== null;
+
+  // 正方得分 - 提取数字，忽略格式
+  const proScoreMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?正方得分(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(\d+)/);
   if (proScoreMatch) result.proScore = parseInt(proScoreMatch[1]);
 
-  const conScoreMatch = block.match(/反方得分[：:]\s*(\d+)/);
+  // 反方得分
+  const conScoreMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?反方得分(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(\d+)/);
   if (conScoreMatch) result.conScore = parseInt(conScoreMatch[1]);
 
-  const proCredMatch = block.match(/来源可信度-正方[：:]\s*(\d)/);
+  // 来源可信度-正方 - 提取星级数字
+  const proCredMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?来源可信度.?正方(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(\d)/);
   if (proCredMatch) result.proCredibility = parseInt(proCredMatch[1]);
 
-  const conCredMatch = block.match(/来源可信度-反方[：:]\s*(\d)/);
+  // 来源可信度-反方
+  const conCredMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?来源可信度.?反方(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(\d)/);
   if (conCredMatch) result.conCredibility = parseInt(conCredMatch[1]);
 
-  // 新增：解析思考整合评估
-  const proReasoningMatch = block.match(/思考整合-正方[：:]\s*(有|无)/);
+  // 思考整合-正方
+  const proReasoningMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?思考整合.?正方(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(有|无)/);
   if (proReasoningMatch) result.proReasoning = proReasoningMatch[1].trim();
 
-  const conReasoningMatch = block.match(/思考整合-反方[：:]\s*(有|无)/);
+  // 思考整合-反方
+  const conReasoningMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?思考整合.?反方(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(有|无)/);
   if (conReasoningMatch) result.conReasoning = conReasoningMatch[1].trim();
 
-  const riskMatch = block.match(/致命风险[：:]\s*(.+)/);
-  if (riskMatch) result.criticalRisk = riskMatch[1].trim();
+  // 致命风险
+  const riskMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?致命风险(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(.+?)(?:\*{1,2})?$/m);
+  if (riskMatch) result.criticalRisk = riskMatch[1].trim().replace(/\*+/g, '');
+
+  // 只要有胜方字段，就认为报告有效（宽松模式）
+  // 这样即使部分字段被截断，也能提取可用信息
+  result.valid = hasMinimumFields;
 
   return result;
 }
