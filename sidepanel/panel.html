@@ -15,8 +15,9 @@
 
     <!-- Mode Switcher -->
     <section class="mode-switcher">
-      <button class="mode-btn active" id="mode-normal">普通</button>
-      <button class="mode-btn" id="mode-discussion">讨论</button>
+      <button class="mode-btn active" id="mode-normal">Normal</button>
+      <button class="mode-btn" id="mode-discussion">Discussion</button>
+      <button class="mode-btn" id="mode-debate">Debate</button>
     </section>
 
     <!-- Normal Mode Content -->
@@ -148,6 +149,78 @@
         <button id="new-discussion-btn">新讨论</button>
       </section>
     </div><!-- end discussion-mode -->
+
+    <!-- Debate Mode Content -->
+    <div id="debate-mode" class="hidden">
+      <section class="debate-setup" id="debate-setup">
+        <h3>开始辩论</h3>
+        <div class="participant-select">
+          <label>辩手：</label>
+          <div class="debater-options">
+            <div class="debater-row">
+              <span class="position-label pro">正方</span>
+              <select id="debater-pro" class="debater-select">
+                <option value="claude">Claude</option>
+                <option value="chatgpt">ChatGPT</option>
+                <option value="gemini">Gemini</option>
+              </select>
+            </div>
+            <div class="debater-row">
+              <span class="position-label con">反方</span>
+              <select id="debater-con" class="debater-select">
+                <option value="chatgpt">ChatGPT</option>
+                <option value="claude">Claude</option>
+                <option value="gemini">Gemini</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <textarea
+          id="debate-topic"
+          placeholder="输入辩题...&#10;&#10;示例：人工智能将对人类就业产生积极影响"
+          rows="4"
+        ></textarea>
+        <button id="start-debate-btn">开始辩论</button>
+      </section>
+
+      <section class="debate-active hidden" id="debate-active">
+        <div class="debate-header">
+          <div class="debate-info">
+            <span class="phase-badge" id="phase-badge">立论阶段</span>
+            <span class="debaters-badge" id="debaters-badge">Claude vs ChatGPT</span>
+          </div>
+          <button class="end-btn" id="end-debate-btn">结束</button>
+        </div>
+        <div class="debate-topic-display" id="debate-topic-display"></div>
+        <div class="debate-positions">
+          <span class="position-tag pro" id="pro-tag">正方: Claude</span>
+          <span class="position-tag con" id="con-tag">反方: ChatGPT</span>
+        </div>
+        <div class="debate-status" id="debate-status">
+          等待立论...
+        </div>
+        <div class="debate-interject">
+          <label>主持人发言（同步发送给双方）</label>
+          <textarea
+            id="debate-interject-input"
+            placeholder="输入指导或追问..."
+          ></textarea>
+          <div class="interject-actions">
+            <button id="debate-interject-btn">发送给双方</button>
+          </div>
+        </div>
+        <div class="debate-controls">
+          <button id="next-phase-btn" disabled>下一阶段</button>
+          <button id="request-verdict-btn" disabled>请求裁决</button>
+        </div>
+      </section>
+
+      <section class="debate-verdict hidden" id="debate-verdict">
+        <h3>辩论裁决</h3>
+        <div id="verdict-content"></div>
+        <button id="new-debate-btn">新辩论</button>
+      </section>
+    </div><!-- end debate-mode -->
 
     <section class="log">
       <h3>活动日志</h3>
