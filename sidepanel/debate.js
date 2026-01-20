@@ -1169,13 +1169,26 @@ function parseVerdictResult(verdict) {
     conScore: 0
   };
 
-  // 辅助正则模式：容忍 Markdown 格式（单行）
+  // 辅助正则模式：简化版，捕获冒号后的所有内容，然后用 cleanValue 清理
   const fieldPattern = (name) => new RegExp(
-    `(?:[-*]?\\s*)?(?:\\*{1,2})?${name}(?:\\*{1,2})?[：:]\\s*(?:\\*{1,2})?(.+?)(?:\\*{1,2})?$`, 'm'
+    `${name}[：:]\\s*(.+)$`, 'm'
   );
+  // 数字模式：支持 [78] 或 78 格式
   const numberPattern = (name) => new RegExp(
-    `(?:[-*]?\\s*)?(?:\\*{1,2})?${name}(?:\\*{1,2})?[：:]\\s*(?:\\*{1,2})?(\\d+)`
+    `${name}[：:]\\s*\\[?(\\d+)`
   );
+
+  // 清理提取的值：去除 [], *, 多余空格
+  const cleanValue = (val) => {
+    if (!val) return '';
+    return val
+      .trim()
+      .replace(/^\[+/, '')      // 开头的 [
+      .replace(/\]+$/, '')      // 结尾的 ]
+      .replace(/\*+/g, '')      // Markdown 加粗
+      .replace(/\s*\(.*?\)\s*$/, '') // 结尾括号说明
+      .trim();
+  };
 
   // 增强的星级解析：支持 ⭐5, 5星, 5 星, 五星, 4/5 等格式
   const parseCredibility = (text) => {
@@ -1207,7 +1220,7 @@ function parseVerdictResult(verdict) {
     if (skillBlock) {
       const block = skillBlock[1];
       const winnerMatch = block.match(fieldPattern('技巧胜方'));
-      if (winnerMatch) result.skillWinner = winnerMatch[1].trim().replace(/\*+/g, '');
+      if (winnerMatch) result.skillWinner = cleanValue(winnerMatch[1]);
 
       const proSkillMatch = block.match(numberPattern('正方技巧分'));
       if (proSkillMatch) result.proSkillScore = parseInt(proSkillMatch[1]);
@@ -1216,36 +1229,36 @@ function parseVerdictResult(verdict) {
       if (conSkillMatch) result.conSkillScore = parseInt(conSkillMatch[1]);
 
       const commentMatch = block.match(fieldPattern('技巧评语'));
-      if (commentMatch) result.skillComment = commentMatch[1].trim().replace(/\*+/g, '');
+      if (commentMatch) result.skillComment = cleanValue(commentMatch[1]);
     }
 
     // 解析事实裁决区块
     if (factBlock) {
       const block = factBlock[1];
       const verdictMatch = block.match(fieldPattern('事实倾向'));
-      if (verdictMatch) result.factVerdict = verdictMatch[1].trim().replace(/\*+/g, '');
+      if (verdictMatch) result.factVerdict = cleanValue(verdictMatch[1]);
 
-      const proCredMatch = block.match(/来源可信度.?正方[：:]\s*(.+?)$/m);
-      if (proCredMatch) result.proCredibility = parseCredibility(proCredMatch[1]);
+      const proCredMatch = block.match(/来源可信度.?正方[：:]\s*\[?(.+?)\]?$/m);
+      if (proCredMatch) result.proCredibility = parseCredibility(cleanValue(proCredMatch[1]));
 
-      const conCredMatch = block.match(/来源可信度.?反方[：:]\s*(.+?)$/m);
-      if (conCredMatch) result.conCredibility = parseCredibility(conCredMatch[1]);
+      const conCredMatch = block.match(/来源可信度.?反方[：:]\s*\[?(.+?)\]?$/m);
+      if (conCredMatch) result.conCredibility = parseCredibility(cleanValue(conCredMatch[1]));
 
-      const evidenceMatch = block.match(/裁判补充证据[：:]\s*(.+?)$/m);
-      if (evidenceMatch) result.judgeEvidence = evidenceMatch[1].trim().replace(/\*+/g, '');
+      const evidenceMatch = block.match(/裁判补充证据[：:]\s*\[?([\s\S]+?)\]?$/m);
+      if (evidenceMatch) result.judgeEvidence = cleanValue(evidenceMatch[1]);
 
-      const reasonMatch = block.match(/裁决理由[：:]\s*(.+?)$/m);
-      if (reasonMatch) result.verdictReason = reasonMatch[1].trim().replace(/\*+/g, '');
+      const reasonMatch = block.match(/裁决理由[：:]\s*\[?([\s\S]+?)\]?$/m);
+      if (reasonMatch) result.verdictReason = cleanValue(reasonMatch[1]);
     }
 
     // 解析风险提示区块
     if (riskBlock) {
       const block = riskBlock[1];
-      const riskMatch = block.match(fieldPattern('致命风险'));
-      if (riskMatch) result.criticalRisk = riskMatch[1].trim().replace(/\*+/g, '');
+      const riskMatch = block.match(/致命风险[：:]\s*\[?([\s\S]+?)\]?$/m);
+      if (riskMatch) result.criticalRisk = cleanValue(riskMatch[1]);
 
-      const missingMatch = block.match(fieldPattern('遗漏因素'));
-      if (missingMatch) result.missingFactors = missingMatch[1].trim().replace(/\*+/g, '');
+      const missingMatch = block.match(/遗漏因素[：:]\s*\[?([\s\S]+?)\]?$/m);
+      if (missingMatch) result.missingFactors = cleanValue(missingMatch[1]);
     }
 
     // 新格式有效性：至少解析到一个区块
@@ -1272,7 +1285,7 @@ function parseVerdictResult(verdict) {
 
     // 辩论技巧
     const skillWinnerMatch = block.match(fieldPattern('技巧胜方'));
-    if (skillWinnerMatch) result.skillWinner = skillWinnerMatch[1].trim().replace(/\*+/g, '').replace(/\s*\(.*\)/, '');
+    if (skillWinnerMatch) result.skillWinner = cleanValue(skillWinnerMatch[1]);
 
     const proSkillMatch = block.match(numberPattern('正方技巧分'));
     if (proSkillMatch) result.proSkillScore = parseInt(proSkillMatch[1]);
@@ -1281,30 +1294,30 @@ function parseVerdictResult(verdict) {
     if (conSkillMatch) result.conSkillScore = parseInt(conSkillMatch[1]);
 
     const skillCommentMatch = block.match(fieldPattern('技巧评语'));
-    if (skillCommentMatch) result.skillComment = skillCommentMatch[1].trim().replace(/\*+/g, '');
+    if (skillCommentMatch) result.skillComment = cleanValue(skillCommentMatch[1]);
 
     // 事实裁决
     const factVerdictMatch = block.match(fieldPattern('事实倾向'));
-    if (factVerdictMatch) result.factVerdict = factVerdictMatch[1].trim().replace(/\*+/g, '');
+    if (factVerdictMatch) result.factVerdict = cleanValue(factVerdictMatch[1]);
 
     const proCredMatch = block.match(/来源可信度.?正方[：:]\s*(.+?)$/m);
-    if (proCredMatch) result.proCredibility = parseCredibility(proCredMatch[1]);
+    if (proCredMatch) result.proCredibility = parseCredibility(cleanValue(proCredMatch[1]));
 
     const conCredMatch = block.match(/来源可信度.?反方[：:]\s*(.+?)$/m);
-    if (conCredMatch) result.conCredibility = parseCredibility(conCredMatch[1]);
+    if (conCredMatch) result.conCredibility = parseCredibility(cleanValue(conCredMatch[1]));
 
     const judgeEvidenceMatch = block.match(multiLineFieldPattern('裁判补充证据'));
-    if (judgeEvidenceMatch) result.judgeEvidence = judgeEvidenceMatch[1].trim().replace(/\*+/g, '').replace(/\n+/g, ' ');
+    if (judgeEvidenceMatch) result.judgeEvidence = cleanValue(judgeEvidenceMatch[1]).replace(/\n+/g, ' ');
 
     const verdictReasonMatch = block.match(multiLineFieldPattern('裁决理由'));
-    if (verdictReasonMatch) result.verdictReason = verdictReasonMatch[1].trim().replace(/\*+/g, '').replace(/\n+/g, ' ');
+    if (verdictReasonMatch) result.verdictReason = cleanValue(verdictReasonMatch[1]).replace(/\n+/g, ' ');
 
     // 风险提示
     const riskMatch = block.match(fieldPattern('致命风险'));
-    if (riskMatch) result.criticalRisk = riskMatch[1].trim().replace(/\*+/g, '');
+    if (riskMatch) result.criticalRisk = cleanValue(riskMatch[1]);
 
     const missingMatch = block.match(fieldPattern('遗漏因素'));
-    if (missingMatch) result.missingFactors = missingMatch[1].trim().replace(/\*+/g, '');
+    if (missingMatch) result.missingFactors = cleanValue(missingMatch[1]);
 
     // 旧格式有效性
     result.valid = skillWinnerMatch !== null || factVerdictMatch !== null;
