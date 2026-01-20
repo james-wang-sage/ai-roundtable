@@ -353,17 +353,45 @@ header .subtitle {
   border-top: 1px solid var(--border-subtle);
   padding-top: 12px;
   flex-shrink: 0;
-  max-height: 180px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
 }
 
-.log h3 {
+.log details {
+  max-height: 180px;
+  overflow: hidden;
+}
+
+.log details[open] {
+  overflow-y: auto;
+}
+
+.log summary {
   font-size: 12px;
   color: var(--text-muted);
-  margin-bottom: 8px;
-  flex-shrink: 0;
+  cursor: pointer;
+  padding: 4px 0;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.log summary::-webkit-details-marker {
+  display: none;
+}
+
+.log summary::before {
+  content: '▶';
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+
+.log details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.log summary:hover {
+  color: var(--electric-cyan);
 }
 
 #log-container {
@@ -913,6 +941,12 @@ header .subtitle {
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
+.position-label.judge {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
 .debater-select {
   flex: 1;
   padding: 8px 12px;
@@ -1047,6 +1081,31 @@ header .subtitle {
 .position-tag.con {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
+}
+
+/* Judges Display */
+.debate-judges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.judges-label {
+  font-size: 12px;
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.judge-tag {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .debate-status {

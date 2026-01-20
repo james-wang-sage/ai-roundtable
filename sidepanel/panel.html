@@ -185,6 +185,15 @@
                 <option value="grok">Grok</option>
               </select>
             </div>
+            <div class="debater-row">
+              <span class="position-label judge">裁判</span>
+              <select id="debater-judge" class="debater-select">
+                <option value="gemini">Gemini</option>
+                <option value="grok">Grok</option>
+                <option value="claude">Claude</option>
+                <option value="chatgpt">ChatGPT</option>
+              </select>
+            </div>
           </div>
         </div>
         <textarea
@@ -207,6 +216,10 @@
         <div class="debate-positions">
           <span class="position-tag pro" id="pro-tag">正方: Claude</span>
           <span class="position-tag con" id="con-tag">反方: ChatGPT</span>
+        </div>
+        <div class="debate-judges" id="judges-display">
+          <span class="judges-label">⚖️ 裁判:</span>
+          <span class="judge-tag" id="judge-tags">Gemini</span>
         </div>
         <div class="debate-status" id="debate-status">
           等待立论...
@@ -235,8 +248,10 @@
     </div><!-- end debate-mode -->
 
     <section class="log">
-      <h3>活动日志</h3>
-      <div id="log-container"></div>
+      <details id="log-details">
+        <summary>活动日志</summary>
+        <div id="log-container"></div>
+      </details>
     </section>
 
     <footer class="copyright">

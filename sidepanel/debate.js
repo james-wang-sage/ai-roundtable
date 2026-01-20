@@ -19,12 +19,12 @@ let debateState = {
   topic: '',
   proAI: null,      // AI arguing FOR the topic
   conAI: null,      // AI arguing AGAINST the topic
+  judgeAI: null,    // AI acting as judge (user-selected)
   currentPhase: 0,  // Index into DEBATE_PHASES
   history: [],      // [{phase, ai, position: 'pro'|'con', content}]
   pendingResponses: new Set(),
-  // Multi-judge consensus
-  verdicts: {},           // {judge: verdictText}
-  pendingJudges: new Set()
+  // Judge verdict
+  verdict: null
 };
 
 // Track polling interval for cleanup
@@ -78,12 +78,14 @@ function setupDebateMode() {
   document.getElementById('new-debate-btn').addEventListener('click', resetDebate);
   document.getElementById('debate-interject-btn').addEventListener('click', handleDebateInterject);
 
-  // Validate debater selection (prevent same AI for both sides)
+  // Validate debater and judge selection (prevent same AI for multiple roles)
   const proSelect = document.getElementById('debater-pro');
   const conSelect = document.getElementById('debater-con');
+  const judgeSelect = document.getElementById('debater-judge');
 
   proSelect.addEventListener('change', () => validateDebaters());
   conSelect.addEventListener('change', () => validateDebaters());
+  judgeSelect.addEventListener('change', () => validateDebaters());
 }
 
 // ============================================
@@ -93,11 +95,16 @@ function setupDebateMode() {
 function validateDebaters() {
   const proAI = document.getElementById('debater-pro').value;
   const conAI = document.getElementById('debater-con').value;
+  const judgeAI = document.getElementById('debater-judge').value;
   const startBtn = document.getElementById('start-debate-btn');
 
+  // Check for conflicts: all three must be different
   if (proAI === conAI) {
     startBtn.disabled = true;
-    startBtn.textContent = '请选择不同的辩手';
+    startBtn.textContent = '正方反方不能相同';
+  } else if (judgeAI === proAI || judgeAI === conAI) {
+    startBtn.disabled = true;
+    startBtn.textContent = '裁判不能参与辩论';
   } else {
     startBtn.disabled = false;
     startBtn.textContent = '开始辩论';
@@ -117,9 +124,15 @@ async function startDebate() {
 
   const proAI = document.getElementById('debater-pro').value;
   const conAI = document.getElementById('debater-con').value;
+  const judgeAI = document.getElementById('debater-judge').value;
 
   if (proAI === conAI) {
     log('正方和反方不能是同一个 AI', 'error');
+    return;
+  }
+
+  if (judgeAI === proAI || judgeAI === conAI) {
+    log('裁判不能同时参与辩论', 'error');
     return;
   }
 
@@ -129,9 +142,11 @@ async function startDebate() {
     topic: topic,
     proAI: proAI,
     conAI: conAI,
+    judgeAI: judgeAI,
     currentPhase: 0,
     history: [],
-    pendingResponses: new Set([proAI, conAI])
+    pendingResponses: new Set([proAI, conAI]),
+    verdict: null
   };
 
   // Update UI
@@ -143,6 +158,7 @@ async function startDebate() {
   document.getElementById('debate-topic-display').textContent = topic;
   document.getElementById('pro-tag').textContent = `正方: ${capitalize(proAI)}`;
   document.getElementById('con-tag').textContent = `反方: ${capitalize(conAI)}`;
+  document.getElementById('judge-tags').textContent = capitalize(judgeAI);
   updateDebateStatus('waiting', `等待 ${proAI} 和 ${conAI} 的立论...`);
 
   // Disable buttons during phase
@@ -529,9 +545,8 @@ async function requestVerdict() {
   document.getElementById('request-verdict-btn').disabled = true;
   updateDebateStatus('waiting', '正在进行高标准尽职调查 (Due Diligence)...');
 
-  // Only the 3rd AI (non-debater) acts as judge - avoids conflict of interest
-  const allAIs = ['claude', 'chatgpt', 'gemini'];
-  const allJudges = allAIs.filter(ai => ai !== debateState.proAI && ai !== debateState.conAI);
+  // Use the user-selected judge
+  const judge = debateState.judgeAI;
 
   // Build full debate transcript
   const transcript = debateState.history.map(h => {
@@ -598,148 +613,279 @@ ${'='.repeat(50)}
 
 ⚠️ 如果缺少结尾的 =============== 将导致审计结果无效！`;
 
-  const judgeName = allJudges.length > 0 ? capitalize(allJudges[0]) : '无可用裁判';
-  log(`[审计] 裁判 ${judgeName} 正在进行尽职调查...`);
+  log(`[审计] 裁判 ${capitalize(judge)} 正在进行尽职调查...`);
 
-  // Initialize verdict collection
-  debateState.verdicts = {};
-  debateState.pendingJudges = new Set(allJudges);
-
-  // Send to all judges IN PARALLEL for faster response
-  await Promise.all(allJudges.map(judge => sendToAI(judge, getVerdictPrompt(judge))));
+  // Send to the selected judge
+  await sendToAI(judge, getVerdictPrompt(judge));
 
   // Clear any existing polling before starting new one
   cleanupVerdictPolling();
 
-  // Collect verdicts with polling
+  // Wait for verdict with polling
   let attempts = 0;
-  const maxAttempts = 90; // 3 minutes max for deep analysis
-  const totalJudges = allJudges.length;
+  const maxAttempts = 300; // 10 minutes max (300 * 2s = 600s) - AI needs time for deep analysis with web search
 
   verdictPollingInterval = setInterval(async () => {
     // Safety check: stop if debate was reset during polling
-    if (!debateState.active && debateState.pendingJudges.size === 0) {
+    if (!debateState.active) {
       cleanupVerdictPolling();
       return;
     }
 
     attempts++;
 
-    for (const judge of allJudges) {
-      if (!debateState.verdicts[judge]) {
-        const response = await getLatestResponse(judge);
-        if (response && response.includes('===审计结果===')) {
-          debateState.verdicts[judge] = response;
-          debateState.pendingJudges.delete(judge);
-          log(`[审计] ${capitalize(judge)} 已提交审计报告`, 'success');
-        }
-      }
-    }
-
-    const receivedCount = totalJudges - debateState.pendingJudges.size;
-    updateDebateStatus('waiting',
-      `等待审计报告: ${Array.from(debateState.pendingJudges).map(capitalize).join(', ') || '处理中...'} (${receivedCount}/${totalJudges})`);
-
-    // Check if all verdicts collected
-    if (debateState.pendingJudges.size === 0) {
+    const response = await getLatestResponse(judge);
+    if (response && response.includes('===审计结果===')) {
+      debateState.verdict = response;
+      log(`[审计] ${capitalize(judge)} 已提交审计报告`, 'success');
       cleanupVerdictPolling();
-      processConsensusVerdict();
+      processSingleJudgeVerdict(judge, response);
+      return;
     }
+
+    updateDebateStatus('waiting', `等待 ${capitalize(judge)} 的审计报告...`);
 
     // Timeout
     if (attempts >= maxAttempts) {
       cleanupVerdictPolling();
-      if (debateState.pendingJudges.size > 0) {
-        log(`[审计] 超时，已收到 ${receivedCount}/${totalJudges} 份报告`, 'error');
-        if (Object.keys(debateState.verdicts).length >= 2) {
-          processConsensusVerdict(); // Process with available verdicts
-        } else {
-          updateDebateStatus('ready', '审计超时，请重试');
-          document.getElementById('request-verdict-btn').disabled = false;
-        }
-      }
+      log(`[审计] 超时，${capitalize(judge)} 未能提交报告`, 'error');
+      updateDebateStatus('ready', '审计超时，请重试');
+      document.getElementById('request-verdict-btn').disabled = false;
     }
   }, 2000);
 }
 
-function processConsensusVerdict() {
-  const verdicts = debateState.verdicts;
-  const allJudges = Object.keys(verdicts);
+function processSingleJudgeVerdict(judge, verdictText) {
+  log(`[裁决] 正在分析 ${capitalize(judge)} 的审计报告...`);
 
-  log(`[裁决] 正在分析裁判报告...`);
+  const parsed = parseVerdictResult(verdictText);
 
-  // Parse the verdict (now single judge)
-  const parsedVerdicts = {};
-  let validJudge = null;
-
-  for (const judge of allJudges) {
-    parsedVerdicts[judge] = parseVerdictResult(verdicts[judge]);
-    if (parsedVerdicts[judge].valid) {
-      validJudge = judge;
-    } else {
-      log(`[裁决] ⚠️ ${capitalize(judge)} 报告格式无效`, 'error');
-    }
-  }
-
-  if (!validJudge) {
-    log('[裁决] ❌ 没有有效审计报告', 'error');
-    showConsensusVerdict(parsedVerdicts, '无法判定', 'invalid', { '正方': 0, '反方': 0, '平局': 0 }, 0);
+  if (!parsed.valid) {
+    log('[裁决] ❌ 审计报告格式无效', 'error');
+    showSingleJudgeVerdict(judge, parsed, '无法判定', 'invalid', '');
     return;
   }
 
-  const v = parsedVerdicts[validJudge];
-
-  // --- STRICT RELIABILITY CHECK (The "Veto" Logic) ---
+  // --- STRICT RELIABILITY CHECK ---
   let riskFlag = false;
   let riskReason = '';
 
   // 1. Check for Low Credibility Sources (<= 2 stars)
-  if (v.proCredibility <= 2 || v.conCredibility <= 2) {
+  if (parsed.proCredibility <= 2 || parsed.conCredibility <= 2) {
     riskFlag = true;
     riskReason = '来源可信度过低 (存在虚假或低质来源)';
   }
 
-  // 2. Check for Missing Reasoning Integration (思考整合检查)
-  if (!riskFlag && v.proReasoning === '无' && v.conReasoning === '无') {
+  // 2. Check for Missing Reasoning Integration
+  if (!riskFlag && parsed.proReasoning === '无' && parsed.conReasoning === '无') {
     riskFlag = true;
     riskReason = '双方均缺乏思考整合 (仅罗列论据，无深度推理)';
   }
 
   // 3. Check for Low Scores (< 70 is weak)
-  if (!riskFlag && v.proScore < 70 && v.conScore < 70) {
+  if (!riskFlag && parsed.proScore < 70 && parsed.conScore < 70) {
     riskFlag = true;
     riskReason = '双方论证质量均未达到决策标准 (<70分)';
   }
 
-  // --- DETERMINE WINNER (single judge decision) ---
-  const winnerVotes = { '正方': 0, '反方': 0, '平局': 0, '资料不足': 0 };
-  if (winnerVotes.hasOwnProperty(v.winner)) {
-    winnerVotes[v.winner] = 1;
-  } else {
-    winnerVotes['资料不足'] = 1;
-  }
-
-  let consensusWinner = v.winner;
+  // --- DETERMINE WINNER ---
+  let winner = parsed.winner;
   let consensusLevel = 'single_judge';
 
   if (riskFlag) {
-    consensusWinner = '高风险/资料不足';
+    winner = '高风险/资料不足';
     consensusLevel = 'risk_flagged';
-  } else if (v.winner === '正方' && v.proScore > 75) {
-    consensusWinner = '正方';
-    consensusLevel = 'single_judge';
-  } else if (v.winner === '反方' && v.conScore > 75) {
-    consensusWinner = '反方';
-    consensusLevel = 'single_judge';
-  } else if (v.winner === '平局') {
-    consensusWinner = '平局';
-    consensusLevel = 'disputed';
-  } else {
-    consensusWinner = v.winner || '需进一步研究';
+  } else if (parsed.winner === '平局') {
     consensusLevel = 'disputed';
   }
 
-  showConsensusVerdict(parsedVerdicts, consensusWinner, consensusLevel, winnerVotes, 1, riskReason);
+  showSingleJudgeVerdict(judge, parsed, winner, consensusLevel, riskReason);
+}
+
+function showSingleJudgeVerdict(judge, parsed, winner, consensusLevel, riskReason) {
+  document.getElementById('debate-active').classList.add('hidden');
+  document.getElementById('debate-verdict').classList.remove('hidden');
+
+  // Style classes
+  let winnerClass = 'tie';
+  if (winner === '正方') winnerClass = 'pro';
+  else if (winner === '反方') winnerClass = 'con';
+  else if (winner.includes('风险') || winner.includes('资料不足')) winnerClass = 'risk';
+
+  const consensusLabels = {
+    single_judge: '⚖️ 裁判裁决',
+    risk_flagged: '⛔️ 风险警报 (自动熔断)',
+    disputed: '⚠️ 存在争议',
+    invalid: '❌ 无效审计'
+  };
+
+  let headerHtml = `
+    <div class="consensus-badge ${consensusLevel}">${consensusLabels[consensusLevel] || '未知状态'}</div>
+    <div class="verdict-winner ${winnerClass}">${winner}</div>
+  `;
+
+  if (riskReason) {
+    headerHtml += `<div class="risk-alert">⚠️ 熔断原因: ${riskReason}</div>`;
+  }
+
+  // Judge Card
+  const isLowCred = parsed.proCredibility <= 2 || parsed.conCredibility <= 2;
+  const hasReasoningIssue = parsed.proReasoning === '无' || parsed.conReasoning === '无';
+
+  let judgeBreakdown = `<div class="judge-breakdown"><h4>裁判审计报告：</h4>`;
+  if (parsed.valid) {
+    judgeBreakdown += `
+      <div class="judge-verdict ${isLowCred || hasReasoningIssue ? 'risk-highlight' : ''}">
+        <div class="judge-header">
+          <span class="judge-name">${capitalize(judge)}</span>
+          <span class="judge-decision">${parsed.winner}</span>
+        </div>
+        <div class="judge-metrics">
+          <span>得分: ${parsed.proScore} vs ${parsed.conScore}</span>
+          <span class="${isLowCred ? 'text-danger' : ''}">信度: ⭐${parsed.proCredibility} vs ⭐${parsed.conCredibility}</span>
+        </div>
+        <div class="judge-metrics">
+          <span class="${parsed.proReasoning === '无' ? 'text-danger' : 'text-success'}">思考整合-正: ${parsed.proReasoning === '有' ? '✓' : '✗'}</span>
+          <span class="${parsed.conReasoning === '无' ? 'text-danger' : 'text-success'}">思考整合-反: ${parsed.conReasoning === '有' ? '✓' : '✗'}</span>
+        </div>
+        <div class="judge-risk">风险提示: ${parsed.criticalRisk}</div>
+      </div>`;
+  }
+  judgeBreakdown += '</div>';
+
+  let html = `
+    ${headerHtml}
+    <div class="verdict-scores">
+      <span class="score pro">正方: ${parsed.proScore}分</span>
+      <span class="score con">反方: ${parsed.conScore}分</span>
+    </div>
+    ${judgeBreakdown}
+    <details class="verdict-details">
+      <summary>查看详细审计报告</summary>
+      <div class="full-verdict">
+        <div class="verdict-text">${escapeHtml(parsed.rawText.replace(/===审计结果===[\s\S]*?===============/, '').trim())}</div>
+      </div>
+    </details>
+  `;
+
+  document.getElementById('verdict-content').innerHTML = html;
+  debateState.active = false;
+  log(`[审计完成] 结果: ${winner}`, consensusLevel === 'risk_flagged' ? 'error' : 'success');
+}
+
+// Keep old function for backwards compatibility (not used with single judge)
+function processConsensusVerdict() {
+  const verdicts = debateState.verdicts;
+  const allJudges = Object.keys(verdicts);
+
+  log(`[裁决] 正在分析 ${allJudges.length} 位裁判的报告...`);
+
+  // Parse all verdicts
+  const parsedVerdicts = {};
+  const validJudges = [];
+
+  for (const judge of allJudges) {
+    parsedVerdicts[judge] = parseVerdictResult(verdicts[judge]);
+    if (parsedVerdicts[judge].valid) {
+      validJudges.push(judge);
+      log(`[裁决] ✓ ${capitalize(judge)} 报告有效`, 'success');
+    } else {
+      log(`[裁决] ⚠️ ${capitalize(judge)} 报告格式无效`, 'error');
+    }
+  }
+
+  if (validJudges.length === 0) {
+    log('[裁决] ❌ 没有有效审计报告', 'error');
+    showConsensusVerdict(parsedVerdicts, '无法判定', 'invalid', { '正方': 0, '反方': 0, '平局': 0 }, 0);
+    return;
+  }
+
+  // --- COLLECT VOTES FROM ALL JUDGES ---
+  const winnerVotes = { '正方': 0, '反方': 0, '平局': 0, '资料不足': 0 };
+  let totalRiskFlags = 0;
+  let riskReasons = [];
+
+  for (const judge of validJudges) {
+    const v = parsedVerdicts[judge];
+
+    // Count votes
+    if (winnerVotes.hasOwnProperty(v.winner)) {
+      winnerVotes[v.winner]++;
+    } else {
+      winnerVotes['资料不足']++;
+    }
+
+    // Check for risk flags from each judge
+    if (v.proCredibility <= 2 || v.conCredibility <= 2) {
+      totalRiskFlags++;
+      riskReasons.push(`${capitalize(judge)}: 来源可信度过低`);
+    }
+    if (v.proReasoning === '无' && v.conReasoning === '无') {
+      totalRiskFlags++;
+      riskReasons.push(`${capitalize(judge)}: 双方缺乏思考整合`);
+    }
+    if (v.proScore < 70 && v.conScore < 70) {
+      totalRiskFlags++;
+      riskReasons.push(`${capitalize(judge)}: 双方得分过低`);
+    }
+  }
+
+  // --- DETERMINE CONSENSUS ---
+  let consensusWinner = '';
+  let consensusLevel = '';
+  let riskReason = '';
+
+  // If majority flagged risk, trigger risk mode
+  if (totalRiskFlags >= validJudges.length) {
+    consensusWinner = '高风险/资料不足';
+    consensusLevel = 'risk_flagged';
+    riskReason = riskReasons[0] || '多项风险指标触发';
+  } else {
+    // Find the winner with most votes
+    const sortedVotes = Object.entries(winnerVotes)
+      .filter(([_, count]) => count > 0)
+      .sort((a, b) => b[1] - a[1]);
+
+    if (sortedVotes.length === 0) {
+      consensusWinner = '无法判定';
+      consensusLevel = 'invalid';
+    } else if (sortedVotes[0][1] === validJudges.length) {
+      // All judges agree - unanimous!
+      consensusWinner = sortedVotes[0][0];
+      consensusLevel = 'unanimous';
+      log(`[裁决] 🏆 全票通过: ${consensusWinner}`, 'success');
+    } else if (sortedVotes.length > 1 && sortedVotes[0][1] === sortedVotes[1][1]) {
+      // Tie between judges - use average scores to decide
+      let avgProScore = 0, avgConScore = 0;
+      for (const j of validJudges) {
+        avgProScore += parsedVerdicts[j].proScore;
+        avgConScore += parsedVerdicts[j].conScore;
+      }
+      avgProScore /= validJudges.length;
+      avgConScore /= validJudges.length;
+
+      if (avgProScore > avgConScore + 5) {
+        consensusWinner = '正方';
+        consensusLevel = 'disputed';
+        log(`[裁决] 裁判意见分歧，按均分判定: 正方 (${avgProScore.toFixed(0)} vs ${avgConScore.toFixed(0)})`, 'success');
+      } else if (avgConScore > avgProScore + 5) {
+        consensusWinner = '反方';
+        consensusLevel = 'disputed';
+        log(`[裁决] 裁判意见分歧，按均分判定: 反方 (${avgConScore.toFixed(0)} vs ${avgProScore.toFixed(0)})`, 'success');
+      } else {
+        consensusWinner = '平局';
+        consensusLevel = 'disputed';
+        log(`[裁决] 裁判意见分歧且分数接近，判定平局`, 'success');
+      }
+    } else {
+      // Majority decision
+      consensusWinner = sortedVotes[0][0];
+      consensusLevel = validJudges.length > 1 ? 'majority' : 'single_judge';
+      log(`[裁决] ${validJudges.length > 1 ? '多数通过' : '裁判裁决'}: ${consensusWinner}`, 'success');
+    }
+  }
+
+  showConsensusVerdict(parsedVerdicts, consensusWinner, consensusLevel, winnerVotes, validJudges.length, riskReason);
 }
 
 function parseVerdictResult(verdict) {
@@ -846,17 +992,26 @@ function showConsensusVerdict(parsedVerdicts, consensusWinner, consensusLevel, v
     invalid: '❌ 无效审计'
   };
 
+  // Build vote summary for 2+ judges
+  const voteEntries = Object.entries(votes).filter(([_, count]) => count > 0);
+  const voteSummary = voteEntries.map(([winner, count]) => `${winner}: ${count}票`).join(' | ');
+
   let headerHtml = `
     <div class="consensus-badge ${consensusLevel}">${consensusLabels[consensusLevel] || '未知状态'}</div>
     <div class="verdict-winner ${winnerClass}">${consensusWinner}</div>
   `;
 
+  if (totalValid > 1) {
+    headerHtml += `<div class="vote-summary">🗳️ 投票结果: ${voteSummary} (${totalValid}位裁判)</div>`;
+  }
+
   if (riskReason) {
     headerHtml += `<div class="risk-alert">⚠️ 熔断原因: ${riskReason}</div>`;
   }
 
-  // Judge Card (single impartial judge)
-  let judgeBreakdown = '<div class="judge-breakdown"><h4>裁判审计报告：</h4>';
+  // Judge Cards (multiple impartial judges)
+  const judgeCount = judges.length;
+  let judgeBreakdown = `<div class="judge-breakdown"><h4>裁判团审计报告 (${judgeCount}位裁判)：</h4>`;
   for (const judge of judges) {
     const v = parsedVerdicts[judge];
     if (v.valid) {
@@ -924,11 +1079,11 @@ function resetDebate() {
     topic: '',
     proAI: null,
     conAI: null,
+    judgeAI: null,
     currentPhase: 0,
     history: [],
     pendingResponses: new Set(),
-    verdicts: {},
-    pendingJudges: new Set()
+    verdict: null
   };
 
   // Reset UI
