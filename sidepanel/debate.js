@@ -778,7 +778,10 @@ ${'='.repeat(50)}
     attempts++;
 
     const response = await getLatestResponse(judge);
-    if (response && response.includes('===审计结果===')) {
+    // 检测新格式 (<<<辩论技巧>>>) 或旧格式 (===审计结果===)
+    const hasNewFormat = response && response.includes('<<<辩论技巧>>>');
+    const hasOldFormat = response && response.includes('===审计结果===');
+    if (hasNewFormat || hasOldFormat) {
       debateState.verdict = response;
       log(`[审计] ${capitalize(judge)} 已提交审计报告`, 'success');
       cleanupVerdictPolling();
