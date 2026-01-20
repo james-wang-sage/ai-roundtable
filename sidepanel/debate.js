@@ -5,14 +5,46 @@
 // Debate Mode State & Constants
 // ============================================
 
-const DEBATE_PHASES = ['opening', 'rebuttal1', 'rebuttal2', 'rebuttal3', 'closing'];
+// 标准辩论赛流程：混合模式（并行准备 + 交替发言）
+// - 立论阶段：双方并行准备，节省时间
+// - 攻辩/驳论/总结：严格交替发言，保证攻防
+const DEBATE_PHASES = [
+  'opening',          // 【并行】双方同时准备立论
+  'attack_pro',       // 正方攻辩（看到双方立论后向反方提问）
+  'attack_con',       // 反方攻辩（向正方提问）
+  'rebuttal_pro_1',   // 正方驳论第1轮
+  'rebuttal_con_1',   // 反方驳论第1轮（针对正方本轮）
+  'rebuttal_pro_2',   // 正方驳论第2轮
+  'rebuttal_con_2',   // 反方驳论第2轮
+  'closing_con',      // 反方总结陈词（先说）
+  'closing_pro'       // 正方总结陈词（最后发言权）
+];
+
 const DEBATE_PHASE_NAMES = {
   opening: '立论阶段',
-  rebuttal1: '驳论第1轮',
-  rebuttal2: '驳论第2轮',
-  rebuttal3: '驳论第3轮',
-  closing: '总结陈词'
+  attack_pro: '正方攻辩',
+  attack_con: '反方攻辩',
+  rebuttal_pro_1: '正方驳论(1)',
+  rebuttal_con_1: '反方驳论(1)',
+  rebuttal_pro_2: '正方驳论(2)',
+  rebuttal_con_2: '反方驳论(2)',
+  closing_con: '反方总结',
+  closing_pro: '正方总结'
 };
+
+// 辅助函数：判断当前阶段是哪方发言
+// 返回 'pro' | 'con' | 'both'（并行阶段）
+function getPhaseDebater(phaseName) {
+  // 并行阶段：双方同时准备
+  if (phaseName === 'opening') return 'both';
+  // 其他阶段按后缀判断
+  if (phaseName.endsWith('_pro')) return 'pro';
+  if (phaseName.endsWith('_con')) return 'con';
+  // 处理带数字的阶段名 (rebuttal_pro_1 等)
+  if (phaseName.includes('_pro_')) return 'pro';
+  if (phaseName.includes('_con_')) return 'con';
+  return null;
+}
 
 let debateState = {
   active: false,
@@ -23,6 +55,8 @@ let debateState = {
   currentPhase: 0,  // Index into DEBATE_PHASES
   history: [],      // [{phase, ai, position: 'pro'|'con', content}]
   pendingResponses: new Set(),
+  phaseInFlight: false,  // 防止双击导致阶段跳过
+  lateResponses: [],     // 存储迟到的回复，避免丢失
   // Judge verdict
   verdict: null
 };
@@ -145,7 +179,9 @@ async function startDebate() {
     judgeAI: judgeAI,
     currentPhase: 0,
     history: [],
-    pendingResponses: new Set([proAI, conAI]),
+    pendingResponses: new Set([proAI, conAI]),  // 混合模式：双方并行准备
+    phaseInFlight: true,  // 标记阶段进行中
+    lateResponses: [],
     verdict: null
   };
 
@@ -159,22 +195,17 @@ async function startDebate() {
   document.getElementById('pro-tag').textContent = `正方: ${capitalize(proAI)}`;
   document.getElementById('con-tag').textContent = `反方: ${capitalize(conAI)}`;
   document.getElementById('judge-tags').textContent = capitalize(judgeAI);
-  updateDebateStatus('waiting', `等待 ${proAI} 和 ${conAI} 的立论...`);
+  updateDebateStatus('waiting', `【立论准备】双方正在并行准备立论...`);
 
   // Disable buttons during phase
   document.getElementById('next-phase-btn').disabled = true;
   document.getElementById('request-verdict-btn').disabled = true;
 
   log(`辩论开始: ${capitalize(proAI)} (正方) vs ${capitalize(conAI)} (反方)`, 'success');
+  log(`[混合模式] 双方并行准备立论中...`);
 
-  // Send opening statements request to both AIs
-  const proPrompt = `你是一场正式辩论的正方辩手。
-
-辩题：${topic}
-
-你的立场：支持该观点（正方）
-
-【重要 - 必须提供来源】
+  // 混合模式：双方同时准备立论（并行，节省时间）
+  const openingPromptBase = `【重要 - 必须提供来源】
 1. 必须使用网络搜索（Web Search）查找最新数据
 2. 每个关键论据必须附上来源URL
 3. 格式：[论据内容] (来源: URL)
@@ -200,6 +231,14 @@ async function startDebate() {
 ⚠️ 无来源的论据将被视为无效！
 ⚠️ 仅罗列论据而无思考整合，将严重扣分！
 ⚠️ 大量使用二手转述/低信度来源，将影响来源可信度评分！`;
+
+  const proPrompt = `你是一场正式辩论的正方辩手。
+
+辩题：${topic}
+
+你的立场：支持该观点（正方）
+
+${openingPromptBase}`;
 
   const conPrompt = `你是一场正式辩论的反方辩手。
 
@@ -207,35 +246,13 @@ async function startDebate() {
 
 你的立场：反对该观点（反方）
 
-【重要 - 必须提供来源】
-1. 必须使用网络搜索（Web Search）查找最新数据
-2. 每个关键论据必须附上来源URL
-3. 格式：[论据内容] (来源: URL)
+${openingPromptBase}`;
 
-【来源质量要求 - 区分一手与二手】
-⚠️ 审计时会严格区分来源等级，影响最终得分！
-✅ 一手来源（高信度）：官方报告、论文、政府数据、公司IR公告、权威机构原文
-⚠️ 二手转述（中信度）：权威媒体（Reuters/CNBC）转述，需注明"据XX报道"
-❌ 低信度来源（扣分）：博客、论坛、聚合站、社交媒体、AI生成内容
-❌ 预测≠事实：投行预测、分析师观点是"预测"，不能当作"已发生的事实"引用
-
-【核心要求 - 思考与整合】
-❌ 禁止：简单罗列论据（如"论据1... 论据2... 论据3..."）
-✅ 必须：展示你的推理过程，将多个论据有机整合，形成连贯的论证链
-
-请进行立论陈述。要求：
-1. 明确阐述你的核心观点
-2. 提供至少 3 个论据，优先使用一手来源，每个论据必须有URL
-3. 【关键】必须包含"推理/分析"段落，解释这些论据如何相互支持、共同指向你的结论
-4. 逻辑清晰，论证有力
-5. 篇幅控制在 300-500 字
-
-⚠️ 无来源的论据将被视为无效！
-⚠️ 仅罗列论据而无思考整合，将严重扣分！
-⚠️ 大量使用二手转述/低信度来源，将影响来源可信度评分！`;
-
-  await sendToAI(proAI, proPrompt);
-  await sendToAI(conAI, conPrompt);
+  // 真正并行发送给双方（使用 Promise.all 确保同时发送）
+  await Promise.all([
+    sendToAI(proAI, proPrompt),
+    sendToAI(conAI, conPrompt)
+  ]);
 }
 
 // ============================================
@@ -251,17 +268,30 @@ function handleDebateResponse(aiType, content) {
     return;
   }
 
-  // Validate that we're actually expecting this response
+  // 处理迟到的回复（阶段已切换但回复才到）
   if (!debateState.pendingResponses.has(aiType)) {
-    log(`[辩论] ⚠️ 忽略 ${capitalize(aiType)} 的重复回复`, 'error');
+    const position = aiType === debateState.proAI ? 'pro' : 'con';
+    const positionLabel = position === 'pro' ? '正方' : '反方';
+
+    // 存储迟到回复而不是丢弃
+    debateState.lateResponses.push({
+      phase: DEBATE_PHASES[debateState.currentPhase - 1] || 'unknown',
+      ai: aiType,
+      position: position,
+      content: content,
+      timestamp: Date.now()
+    });
+
+    log(`[辩论] ⚠️ ${capitalize(aiType)} (${positionLabel}) 的回复迟到，已保存但不影响当前阶段`, 'error');
     return;
   }
 
   const position = aiType === debateState.proAI ? 'pro' : 'con';
   const phaseName = DEBATE_PHASES[debateState.currentPhase];
 
-  // Check source compliance (URL requirement) - only for debate phases, not closing
-  if (phaseName !== 'closing') {
+  // Check source compliance (URL requirement) - only for non-closing phases
+  const isClosingPhase = phaseName.startsWith('closing');
+  if (!isClosingPhase) {
     const sourceCheck = checkSourceCompliance(content, aiType, position);
     // Store compliance info with the response
     debateState.history.push({
@@ -285,21 +315,26 @@ function handleDebateResponse(aiType, content) {
   // Remove from pending
   debateState.pendingResponses.delete(aiType);
 
-  log(`辩论: ${capitalize(aiType)} (${position === 'pro' ? '正方' : '反方'}) 已回复`, 'success');
+  const phaseDisplayName = DEBATE_PHASE_NAMES[phaseName];
+  const positionLabel = position === 'pro' ? '正方' : '反方';
+  log(`[${phaseDisplayName}] ${capitalize(aiType)} (${positionLabel}) 已完成发言`, 'success');
 
   // Check if all pending responses received
   if (debateState.pendingResponses.size === 0) {
     onDebatePhaseComplete();
   } else {
-    const remaining = Array.from(debateState.pendingResponses).join(', ');
-    updateDebateStatus('waiting', `等待 ${remaining}...`);
+    // 并行阶段：显示已完成的一方，等待另一方
+    const remaining = Array.from(debateState.pendingResponses).map(capitalize).join(', ');
+    updateDebateStatus('waiting', `【${phaseDisplayName}】${capitalize(aiType)} 已完成，等待 ${remaining}...`);
   }
 }
 
 function onDebatePhaseComplete() {
   const phaseName = DEBATE_PHASE_NAMES[DEBATE_PHASES[debateState.currentPhase]];
   log(`${phaseName}完成`, 'success');
-  updateDebateStatus('ready', `${phaseName}完成，可以进入下一阶段`);
+
+  // 阶段完成，解除锁定
+  debateState.phaseInFlight = false;
 
   // Enable buttons
   document.getElementById('next-phase-btn').disabled = false;
@@ -308,19 +343,40 @@ function onDebatePhaseComplete() {
   // Update next phase button text
   const nextPhaseIndex = debateState.currentPhase + 1;
   if (nextPhaseIndex < DEBATE_PHASES.length) {
-    document.getElementById('next-phase-btn').textContent =
-      `进入${DEBATE_PHASE_NAMES[DEBATE_PHASES[nextPhaseIndex]]}`;
+    const nextPhaseName = DEBATE_PHASE_NAMES[DEBATE_PHASES[nextPhaseIndex]];
+    document.getElementById('next-phase-btn').textContent = `进入${nextPhaseName}`;
+    updateDebateStatus('ready', `${phaseName}完成 → 点击进入${nextPhaseName}`);
   } else {
     document.getElementById('next-phase-btn').disabled = true;
     document.getElementById('next-phase-btn').textContent = '辩论已完成';
+    updateDebateStatus('ready', '所有阶段完成，可以请求裁决');
   }
 }
 
 // ============================================
-// Debate Phase Progression
+// Debate Phase Progression (混合模式)
 // ============================================
 
 async function nextDebatePhase() {
+  // 防护检查：辩论未激活
+  if (!debateState.active) {
+    log('[辩论] 辩论未激活，无法进入下一阶段', 'error');
+    return;
+  }
+
+  // 防护检查：阶段正在进行中（防止双击）
+  if (debateState.phaseInFlight) {
+    log('[辩论] 当前阶段正在进行，请等待完成', 'error');
+    return;
+  }
+
+  // 防护检查：还有未完成的回复
+  if (debateState.pendingResponses.size > 0) {
+    const remaining = Array.from(debateState.pendingResponses).map(capitalize).join(', ');
+    log(`[辩论] 还在等待 ${remaining} 的回复`, 'error');
+    return;
+  }
+
   debateState.currentPhase++;
 
   if (debateState.currentPhase >= DEBATE_PHASES.length) {
@@ -328,88 +384,157 @@ async function nextDebatePhase() {
     return;
   }
 
+  // 标记阶段进行中
+  debateState.phaseInFlight = true;
+
   const phaseName = DEBATE_PHASES[debateState.currentPhase];
   const phaseDisplayName = DEBATE_PHASE_NAMES[phaseName];
+  const debaterPosition = getPhaseDebater(phaseName);
 
-  // Update UI
+  // Update UI - 立即禁用按钮防止双击
   document.getElementById('phase-badge').textContent = phaseDisplayName;
   document.getElementById('next-phase-btn').disabled = true;
   document.getElementById('request-verdict-btn').disabled = true;
 
-  // Get previous phase responses
-  const prevPhase = DEBATE_PHASES[debateState.currentPhase - 1];
-  const proResponse = debateState.history.find(
-    h => h.phase === prevPhase && h.position === 'pro'
-  )?.content || '';
-  const conResponse = debateState.history.find(
-    h => h.phase === prevPhase && h.position === 'con'
-  )?.content || '';
+  // 根据阶段类型决定发言方
+  if (debaterPosition === 'both') {
+    // 并行阶段：双方同时发言
+    debateState.pendingResponses = new Set([debateState.proAI, debateState.conAI]);
+    updateDebateStatus('waiting', `【${phaseDisplayName}】双方并行准备中...`);
+    log(`[并行阶段] ${phaseDisplayName}开始`);
 
-  // Set pending responses
-  debateState.pendingResponses = new Set([debateState.proAI, debateState.conAI]);
-  updateDebateStatus('waiting', `${phaseDisplayName}: 等待双方回复...`);
+    const proPrompt = generatePhasePrompt(phaseName, 'pro');
+    const conPrompt = generatePhasePrompt(phaseName, 'con');
 
-  log(`${phaseDisplayName}开始`);
+    // 真正并行发送（使用 Promise.all）
+    await Promise.all([
+      sendToAI(debateState.proAI, proPrompt),
+      sendToAI(debateState.conAI, conPrompt)
+    ]);
+  } else {
+    // 交替阶段：单方发言
+    const currentDebater = debaterPosition === 'pro' ? debateState.proAI : debateState.conAI;
+    debateState.pendingResponses = new Set([currentDebater]);
+    updateDebateStatus('waiting', `【${phaseDisplayName}】等待 ${capitalize(currentDebater)} 发言...`);
+    log(`[交替发言] ${phaseDisplayName}开始，${capitalize(currentDebater)} 发言`);
 
-  // Generate phase-specific prompts
-  let proPrompt, conPrompt;
+    const prompt = generatePhasePrompt(phaseName, debaterPosition);
+    await sendToAI(currentDebater, prompt);
+  }
+}
 
-  if (phaseName.startsWith('rebuttal')) {
-    const roundNum = phaseName.slice(-1);  // '1', '2', or '3'
+// ============================================
+// Phase-specific Prompt Generator
+// ============================================
+
+function generatePhasePrompt(phaseName, position) {
+  const topic = debateState.topic;
+  const positionLabel = position === 'pro' ? '正方（支持）' : '反方（反对）';
+  const opposingLabel = position === 'pro' ? '反方' : '正方';
+
+  // 获取对方的最新回复（用于反驳/回应）
+  const getOpposingResponse = () => {
+    // 查找对方最近的发言
+    for (let i = debateState.history.length - 1; i >= 0; i--) {
+      const h = debateState.history[i];
+      if (h.position !== position) {
+        return h.content;
+      }
+    }
+    return '';
+  };
+
+  // 获取己方的最新回复
+  const getOwnResponse = () => {
+    for (let i = debateState.history.length - 1; i >= 0; i--) {
+      const h = debateState.history[i];
+      if (h.position === position) {
+        return h.content;
+      }
+    }
+    return '';
+  };
+
+  // ========== 攻辩阶段 (attack_pro / attack_con) ==========
+  // 攻辩时双方都能看到彼此的立论，保证公平
+  if (phaseName === 'attack_pro' || phaseName === 'attack_con') {
+    // 获取双方的立论内容
+    const proOpening = debateState.history.find(h => h.phase === 'opening' && h.position === 'pro')?.content || '';
+    const conOpening = debateState.history.find(h => h.phase === 'opening' && h.position === 'con')?.content || '';
+
+    // 获取之前的攻辩内容（如果有）
+    const previousAttack = getOpposingResponse();
+    const hasPreviousAttack = phaseName === 'attack_con' && previousAttack;
+
+    let contextSection = `【双方立论】
+
+<正方立论>
+${proOpening}
+</正方立论>
+
+<反方立论>
+${conOpening}
+</反方立论>`;
+
+    if (hasPreviousAttack) {
+      contextSection += `
+
+【正方的攻辩】
+<正方攻辩>
+${previousAttack}
+</正方攻辩>`;
+    }
+
+    return `这是辩论的【攻辩阶段】。
+
+辩题：${topic}
+你的立场：${positionLabel}
+
+${contextSection}
+
+【攻辩规则】
+攻辩是辩论赛的核心环节！你需要：
+1. 针对对方立论中的论点提出 2-3 个尖锐问题
+2. 指出对方论证中的逻辑漏洞或事实错误
+3. 用反问或追问揭露对方立场的弱点
+${hasPreviousAttack ? '4. 可以回应对方的攻辩问题' : ''}
+
+【问题格式要求】
+每个问题应该：
+- 直接针对对方立论中的具体论据
+- 暴露对方论证的弱点
+- 让对方难以回避
+
+【重要 - 必须提供来源】
+如果你引用新的事实或数据来质疑对方，必须附上URL来源。
+
+请进行攻辩（向对方提问）：
+1. 提出 2-3 个针对性问题
+2. 每个问题要指出对方的具体问题所在
+3. 可以用反证或事实质疑对方
+4. 篇幅控制在 200-400 字
+
+⚠️ 攻辩问题必须有理有据，不能空洞质疑！`;
+  }
+
+  // ========== 驳论阶段 (rebuttal_pro_1/2, rebuttal_con_1/2) ==========
+  if (phaseName.includes('rebuttal')) {
+    const roundNum = phaseName.endsWith('_1') ? '1' : '2';
+    const opposingResponse = getOpposingResponse();
     const roundFocus = {
-      '1': '集中攻击对方的核心论点和主要论据',
-      '2': '深入反驳对方的反驳，补充新的论据和证据',
-      '3': '做最后的有力反击，巩固你的立场优势'
+      '1': '集中攻击对方的核心论点，回应对方的攻辩问题',
+      '2': '深入反驳，做最后的有力攻击，巩固你的立场优势'
     };
 
-    proPrompt = `这是辩论的驳论阶段（第 ${roundNum} 轮，共 3 轮）。
+    return `这是辩论的【驳论阶段】（第 ${roundNum} 轮，共 2 轮）。
 
-辩题：${debateState.topic}
-你的立场：正方（支持）
+辩题：${topic}
+你的立场：${positionLabel}
 
-反方的最新观点：
-<反方观点>
-${conResponse}
-</反方观点>
-
-【重要 - 必须提供来源】
-1. 使用网络搜索验证对方论据的真实性
-2. 新论据必须附上URL来源
-3. 指出对方来源的问题（如有）
-
-【来源质量审计 - 攻击对方弱点】
-审计时会严格区分来源等级！你可以攻击对方的来源质量：
-- 对方使用"二手转述"而非一手来源？指出！
-- 对方把"预测"当"事实"引用？揭露！
-- 对方使用低信度来源（博客/聚合站）？质疑！
-同时确保你自己的新论据使用一手来源，避免同样的问题。
-
-【核心要求 - 思考与整合】
-❌ 禁止：逐条反驳后简单堆砌（如"反驳1... 反驳2..."）
-✅ 必须：展示批判性思维，分析对方论证的结构性缺陷，整合你的反驳形成系统性攻击
-
-本轮重点：${roundFocus[roundNum]}
-
-请进行驳论：
-1. 验证并质疑对方引用的来源（一手/二手/预测/事实？）
-2. 用有URL来源的一手数据反驳对方
-3. 【关键】必须包含"分析/推理"段落，解释为什么你的反驳能够系统性地瓦解对方论证
-4. 进一步强化你的立场
-5. 篇幅控制在 300-500 字
-
-⚠️ 无来源的论据将被视为无效！
-⚠️ 仅罗列反驳而无深度分析，将严重扣分！
-⚠️ 使用低信度来源将影响你的可信度评分！`;
-
-    conPrompt = `这是辩论的驳论阶段（第 ${roundNum} 轮，共 3 轮）。
-
-辩题：${debateState.topic}
-你的立场：反方（反对）
-
-正方的最新观点：
-<正方观点>
-${proResponse}
-</正方观点>
+【${opposingLabel}的最新发言】
+<${opposingLabel}观点>
+${opposingResponse}
+</${opposingLabel}观点>
 
 【重要 - 必须提供来源】
 1. 使用网络搜索验证对方论据的真实性
@@ -421,53 +546,42 @@ ${proResponse}
 - 对方使用"二手转述"而非一手来源？指出！
 - 对方把"预测"当"事实"引用？揭露！
 - 对方使用低信度来源（博客/聚合站）？质疑！
-同时确保你自己的新论据使用一手来源，避免同样的问题。
 
 【核心要求 - 思考与整合】
-❌ 禁止：逐条反驳后简单堆砌（如"反驳1... 反驳2..."）
-✅ 必须：展示批判性思维，分析对方论证的结构性缺陷，整合你的反驳形成系统性攻击
+❌ 禁止：逐条反驳后简单堆砌
+✅ 必须：展示批判性思维，整合你的反驳形成系统性攻击
 
 本轮重点：${roundFocus[roundNum]}
 
 请进行驳论：
-1. 验证并质疑对方引用的来源（一手/二手/预测/事实？）
-2. 用有URL来源的一手数据反驳对方
-3. 【关键】必须包含"分析/推理"段落，解释为什么你的反驳能够系统性地瓦解对方论证
-4. 进一步强化你的立场
+1. 回应对方的攻辩问题（如有）
+2. 验证并质疑对方引用的来源
+3. 用有URL来源的一手数据反驳对方
+4. 【关键】必须包含"分析/推理"段落
 5. 篇幅控制在 300-500 字
 
-⚠️ 无来源的论据将被视为无效！
-⚠️ 仅罗列反驳而无深度分析，将严重扣分！
-⚠️ 使用低信度来源将影响你的可信度评分！`;
-  } else if (phaseName === 'closing') {
+⚠️ 无来源的论据将被视为无效！`;
+  }
+
+  // ========== 总结陈词 (closing_con / closing_pro) ==========
+  if (phaseName.startsWith('closing')) {
     // Build full debate history for closing
     const allHistory = debateState.history.map(h => {
       const posLabel = h.position === 'pro' ? '正方' : '反方';
-      const phaseLabel = DEBATE_PHASE_NAMES[h.phase];
+      const phaseLabel = DEBATE_PHASE_NAMES[h.phase] || h.phase;
       return `[${posLabel} - ${phaseLabel}]\n${h.content}`;
     }).join('\n\n---\n\n');
 
-    proPrompt = `这是辩论的总结陈词阶段。
+    const closingNote = phaseName === 'closing_pro'
+      ? '\n\n【注意】你是最后发言者，这是你的最后机会做出有力结论！'
+      : '';
 
-辩题：${debateState.topic}
-你的立场：正方（支持）
+    return `这是辩论的【总结陈词阶段】。${closingNote}
 
-以下是辩论的完整历史：
-${allHistory}
+辩题：${topic}
+你的立场：${positionLabel}
 
-请进行总结陈词：
-1. 总结你的核心观点和主要论据
-2. 回应对方最有力的反驳
-3. 强调你方观点的优势
-4. 做出有力的结论性陈述
-5. 篇幅控制在 200-400 字`;
-
-    conPrompt = `这是辩论的总结陈词阶段。
-
-辩题：${debateState.topic}
-你的立场：反方（反对）
-
-以下是辩论的完整历史：
+【辩论完整记录】
 ${allHistory}
 
 请进行总结陈词：
@@ -478,8 +592,8 @@ ${allHistory}
 5. 篇幅控制在 200-400 字`;
   }
 
-  await sendToAI(debateState.proAI, proPrompt);
-  await sendToAI(debateState.conAI, conPrompt);
+  // Fallback
+  return `辩题：${topic}\n你的立场：${positionLabel}\n请继续辩论。`;
 }
 
 // ============================================
@@ -505,9 +619,11 @@ async function handleDebateInterject() {
 
   log(`[主持人] 正在获取双方最新回复...`);
 
-  // Get latest responses from both debaters
-  const proResponse = await getLatestResponse(debateState.proAI);
-  const conResponse = await getLatestResponse(debateState.conAI);
+  // 并行获取双方最新回复（使用 Promise.all 避免串行等待）
+  const [proResponse, conResponse] = await Promise.all([
+    getLatestResponse(debateState.proAI),
+    getLatestResponse(debateState.conAI)
+  ]);
 
   // Send to both with context
   const proMsg = `[主持人发言] ${message}
@@ -1083,6 +1199,8 @@ function resetDebate() {
     currentPhase: 0,
     history: [],
     pendingResponses: new Set(),
+    phaseInFlight: false,
+    lateResponses: [],
     verdict: null
   };
 
