@@ -672,62 +672,87 @@ async function requestVerdict() {
     return `[${posLabel} (${aiLabel}) - ${phaseLabel}]\n${h.content}`;
   }).join('\n\n' + '='.repeat(50) + '\n\n');
 
-  const getVerdictPrompt = (judgeAI) => `你现在的身份是：【首席风险官 (CRO) & 财务审计师】。
-你的任务不是选出辩论的胜者，而是为了"投资决策"或"生命安全"进行尽职调查 (Due Diligence)。
+  const getVerdictPrompt = (judgeAI) => `你是本场辩论的【独立裁判】，需要完成两个独立的评估任务：
 
-❌ 拒绝模棱两可。
-❌ 拒绝盲目信任。
-✅ 必须核实每一个关键主张。
+📋 任务说明：
+1. 【辩论技巧评分】- 评价谁"辩得更好"（与观点对错无关）
+2. 【事实裁决】- 判断哪个观点"更接近真相"（需要你自己调研）
 
 辩题：${debateState.topic}
-正方：${capitalize(debateState.proAI)}
-反方：${capitalize(debateState.conAI)}
+正方：${capitalize(debateState.proAI)}（支持该观点）
+反方：${capitalize(debateState.conAI)}（反对该观点）
 
 辩论记录：
 ${'='.repeat(50)}
 ${transcript}
 ${'='.repeat(50)}
 
-请执行以下审计程序：
+════════════════════════════════════════
+第一部分：【辩论技巧评分】
+════════════════════════════════════════
 
-第一步：【来源核实】(Source Verification)
-请对双方引用的关键URL进行网络搜索验证。
-- 只有官方/权威来源（如论文、政府报告、知名媒体）才算有效。
-- 博客、论坛、社交媒体视为"低信度"。
-- 必须列出：[真实] / [虚假] / [断章取义] / [无效链接] 的具体情况。
+⚠️ 重要：此部分仅评估辩论技巧，不考虑观点本身对错！
+即使某方的观点是错的，如果辩论技巧出色，仍应给高分。
 
-第二步：【论证质量评估】(Reasoning Quality Assessment) ⭐新增
-评估双方的"思考整合"能力：
-- 是否仅仅罗列论据，还是展示了深度推理？
-- 论据之间是否有逻辑连接，形成连贯的论证链？
-- 是否有"分析/推理"段落解释论据如何支持结论？
-⚠️ 仅罗列论据而无思考整合的一方，得分上限为70分！
+评估维度（每项20分，共100分）：
+1. 逻辑清晰度 - 论点是否条理分明、层次清楚
+2. 论证能力 - 论据是否有力支撑论点
+3. 反驳能力 - 对对方观点的回应是否有效
+4. 表达技巧 - 语言是否精准、有说服力
+5. 整体连贯性 - 全程论述是否前后一致、有深度
 
-第三步：【致命风险评估】(Critical Risk Assessment)
-如果根据本次辩论的结果进行投资或决策，最大的风险是什么？
-是否存在双方都忽略的"黑天鹅"因素？
+请给出具体分析和打分。
 
-第四步：【最终裁决】
-只有在证据确凿（Sources Verified & Strong Logic & Good Reasoning）的情况下才能判定一方胜出。
-如果双方证据都薄弱或缺乏深度思考，必须判定为"资料不足/高风险"。
+════════════════════════════════════════
+第二部分：【事实裁决】
+════════════════════════════════════════
 
-⚠️ 【极重要】请在回复的最后，严格按以下格式输出结果。
+⚠️ 重要：此部分是你作为裁判的独立判断，基于事实和推理！
+你需要：
+1. 核实双方引用的来源（真实/虚假/断章取义）
+2. 进行你自己的网络搜索和资料收集
+3. 结合你的知识和分析能力
+4. 判断哪个观点更接近客观真相
+
+请提供：
+- 来源核实结果
+- 你自己搜集到的关键证据
+- 你的分析推理过程
+- 最终倾向判断
+
+════════════════════════════════════════
+第三部分：【风险提示】
+════════════════════════════════════════
+
+如果根据本辩论结果做决策，最大风险是什么？
+是否有双方都遗漏的重要因素？
+
+════════════════════════════════════════
+
+⚠️ 【极重要】请在回复最后，严格按以下格式输出结果：
 - 不要使用Markdown代码块
-- 必须包含开头 ===审计结果=== 和结尾 ===============
-- 所有字段必须填写，不能省略
+- 必须包含开头和结尾标记
+- 所有字段必须填写
 
 ===审计结果===
-胜方：[正方/反方/平局/资料不足]
-正方得分：[0-100] (低于60分为不及格，仅罗列论据上限70分)
-反方得分：[0-100] (低于60分为不及格，仅罗列论据上限70分)
-来源可信度-正方：[1-5]星 (1-2星为高风险)
-来源可信度-反方：[1-5]星 (1-2星为高风险)
-思考整合-正方：[有/无] (无深度推理则标记"无")
-思考整合-反方：[有/无] (无深度推理则标记"无")
-致命风险：[一句话描述最大风险]
+【辩论技巧】
+技巧胜方：[正方/反方/平局] (谁辩得更好)
+正方技巧分：[0-100]
+反方技巧分：[0-100]
+技巧评语：[一句话点评辩论表现]
+
+【事实裁决】
+事实倾向：[正方观点/反方观点/证据不足/各有道理]
+来源可信度-正方：[1-5]星
+来源可信度-反方：[1-5]星
+裁判补充证据：[你自己搜集到的关键信息，简述]
+裁决理由：[基于事实和推理，为什么倾向这一方]
+
+【风险提示】
+致命风险：[一句话描述]
 ===============
 
-⚠️ 如果缺少结尾的 =============== 将导致审计结果无效！`;
+⚠️ 缺少结尾 =============== 将导致结果无效！`;
 
   log(`[审计] 裁判 ${capitalize(judge)} 正在进行尽职调查...`);
 
@@ -778,7 +803,7 @@ function processSingleJudgeVerdict(judge, verdictText) {
 
   if (!parsed.valid) {
     log('[裁决] ❌ 审计报告格式无效', 'error');
-    showSingleJudgeVerdict(judge, parsed, '无法判定', 'invalid', '');
+    showSingleJudgeVerdict(judge, parsed, 'invalid', '');
     return;
   }
 
@@ -786,47 +811,52 @@ function processSingleJudgeVerdict(judge, verdictText) {
   let riskFlag = false;
   let riskReason = '';
 
-  // 1. Check for Low Credibility Sources (<= 2 stars)
-  if (parsed.proCredibility <= 2 || parsed.conCredibility <= 2) {
+  // 1. Check for Low Credibility Sources (<= 2 stars, but only if parsed)
+  const hasCredibilityData = parsed.proCredibility > 0 || parsed.conCredibility > 0;
+  if (hasCredibilityData && (parsed.proCredibility <= 2 || parsed.conCredibility <= 2)) {
     riskFlag = true;
     riskReason = '来源可信度过低 (存在虚假或低质来源)';
   }
 
-  // 2. Check for Missing Reasoning Integration
-  if (!riskFlag && parsed.proReasoning === '无' && parsed.conReasoning === '无') {
+  // 2. Check for Missing Judge Research (new model: judge should provide evidence/reasoning)
+  if (!riskFlag && !parsed.judgeEvidence && !parsed.verdictReason) {
     riskFlag = true;
-    riskReason = '双方均缺乏思考整合 (仅罗列论据，无深度推理)';
+    riskReason = '裁判未提供独立调研或裁决理由';
   }
 
-  // 3. Check for Low Scores (< 70 is weak)
-  if (!riskFlag && parsed.proScore < 70 && parsed.conScore < 70) {
+  // 3. Check for Low Skill Scores (< 60 is weak, only if scores were parsed)
+  const hasSkillScores = parsed.proSkillScore > 0 || parsed.conSkillScore > 0;
+  if (!riskFlag && hasSkillScores && parsed.proSkillScore < 60 && parsed.conSkillScore < 60) {
     riskFlag = true;
-    riskReason = '双方论证质量均未达到决策标准 (<70分)';
+    riskReason = '双方辩论技巧均未达标 (<60分)';
   }
 
-  // --- DETERMINE WINNER ---
-  let winner = parsed.winner;
+  // --- DETERMINE CONSENSUS LEVEL ---
   let consensusLevel = 'single_judge';
 
   if (riskFlag) {
-    winner = '高风险/资料不足';
     consensusLevel = 'risk_flagged';
-  } else if (parsed.winner === '平局') {
+  } else if (parsed.skillWinner === '平局' && parsed.factVerdict.includes('各有')) {
     consensusLevel = 'disputed';
   }
 
-  showSingleJudgeVerdict(judge, parsed, winner, consensusLevel, riskReason);
+  showSingleJudgeVerdict(judge, parsed, consensusLevel, riskReason);
 }
 
-function showSingleJudgeVerdict(judge, parsed, winner, consensusLevel, riskReason) {
+function showSingleJudgeVerdict(judge, parsed, consensusLevel, riskReason) {
   document.getElementById('debate-active').classList.add('hidden');
   document.getElementById('debate-verdict').classList.remove('hidden');
 
-  // Style classes
-  let winnerClass = 'tie';
-  if (winner === '正方') winnerClass = 'pro';
-  else if (winner === '反方') winnerClass = 'con';
-  else if (winner.includes('风险') || winner.includes('资料不足')) winnerClass = 'risk';
+  // 技巧胜方样式
+  let skillWinnerClass = 'tie';
+  if (parsed.skillWinner === '正方') skillWinnerClass = 'pro';
+  else if (parsed.skillWinner === '反方') skillWinnerClass = 'con';
+
+  // 事实倾向样式
+  let factVerdictClass = 'tie';
+  if (parsed.factVerdict.includes('正方')) factVerdictClass = 'pro';
+  else if (parsed.factVerdict.includes('反方')) factVerdictClass = 'con';
+  else if (parsed.factVerdict.includes('不足') || parsed.factVerdict.includes('各有')) factVerdictClass = 'risk';
 
   const consensusLabels = {
     single_judge: '⚖️ 裁判裁决',
@@ -835,47 +865,62 @@ function showSingleJudgeVerdict(judge, parsed, winner, consensusLevel, riskReaso
     invalid: '❌ 无效审计'
   };
 
-  let headerHtml = `
-    <div class="consensus-badge ${consensusLevel}">${consensusLabels[consensusLevel] || '未知状态'}</div>
-    <div class="verdict-winner ${winnerClass}">${winner}</div>
-  `;
+  // Check for low credibility (only if data was parsed)
+  const hasCredibilityData = parsed.proCredibility > 0 || parsed.conCredibility > 0;
+  const isLowCred = hasCredibilityData && (parsed.proCredibility <= 2 || parsed.conCredibility <= 2);
 
-  if (riskReason) {
-    headerHtml += `<div class="risk-alert">⚠️ 熔断原因: ${riskReason}</div>`;
-  }
-
-  // Judge Card
-  const isLowCred = parsed.proCredibility <= 2 || parsed.conCredibility <= 2;
-  const hasReasoningIssue = parsed.proReasoning === '无' || parsed.conReasoning === '无';
-
-  let judgeBreakdown = `<div class="judge-breakdown"><h4>裁判审计报告：</h4>`;
-  if (parsed.valid) {
-    judgeBreakdown += `
-      <div class="judge-verdict ${isLowCred || hasReasoningIssue ? 'risk-highlight' : ''}">
-        <div class="judge-header">
-          <span class="judge-name">${capitalize(judge)}</span>
-          <span class="judge-decision">${parsed.winner}</span>
-        </div>
-        <div class="judge-metrics">
-          <span>得分: ${parsed.proScore} vs ${parsed.conScore}</span>
-          <span class="${isLowCred ? 'text-danger' : ''}">信度: ⭐${parsed.proCredibility} vs ⭐${parsed.conCredibility}</span>
-        </div>
-        <div class="judge-metrics">
-          <span class="${parsed.proReasoning === '无' ? 'text-danger' : 'text-success'}">思考整合-正: ${parsed.proReasoning === '有' ? '✓' : '✗'}</span>
-          <span class="${parsed.conReasoning === '无' ? 'text-danger' : 'text-success'}">思考整合-反: ${parsed.conReasoning === '有' ? '✓' : '✗'}</span>
-        </div>
-        <div class="judge-risk">风险提示: ${parsed.criticalRisk}</div>
-      </div>`;
-  }
-  judgeBreakdown += '</div>';
+  // 安全：所有 AI 输出都需要转义，防止 XSS
+  const safeSkillWinner = escapeHtml(parsed.skillWinner);
+  const safeFactVerdict = escapeHtml(parsed.factVerdict);
+  const safeSkillComment = escapeHtml(parsed.skillComment);
+  const safeJudgeEvidence = escapeHtml(parsed.judgeEvidence);
+  const safeVerdictReason = escapeHtml(parsed.verdictReason);
+  const safeCriticalRisk = escapeHtml(parsed.criticalRisk);
+  const safeRiskReason = escapeHtml(riskReason);
 
   let html = `
-    ${headerHtml}
-    <div class="verdict-scores">
-      <span class="score pro">正方: ${parsed.proScore}分</span>
-      <span class="score con">反方: ${parsed.conScore}分</span>
+    <div class="consensus-badge ${consensusLevel}">${consensusLabels[consensusLevel] || '未知状态'}</div>
+    ${riskReason ? `<div class="risk-alert">⚠️ 熔断原因: ${safeRiskReason}</div>` : ''}
+
+    <!-- 两个独立的评判结果 -->
+    <div class="dual-verdict">
+      <!-- 辩论技巧评分 -->
+      <div class="verdict-section skill-section">
+        <h4>🎯 辩论技巧评分</h4>
+        <p class="section-subtitle">（谁辩得更好，与观点对错无关）</p>
+        <div class="verdict-winner ${skillWinnerClass}">${safeSkillWinner}</div>
+        <div class="verdict-scores">
+          <span class="score pro">正方: ${parsed.proSkillScore}分</span>
+          <span class="score con">反方: ${parsed.conSkillScore}分</span>
+        </div>
+        ${safeSkillComment ? `<div class="skill-comment">💬 ${safeSkillComment}</div>` : ''}
+      </div>
+
+      <!-- 事实裁决 -->
+      <div class="verdict-section fact-section">
+        <h4>📊 事实裁决</h4>
+        <p class="section-subtitle">（基于证据和裁判调研）</p>
+        <div class="verdict-winner ${factVerdictClass}">${safeFactVerdict}</div>
+        <div class="credibility-scores ${isLowCred ? 'low-credibility' : ''}">
+          <span>来源可信度: ⭐${parsed.proCredibility} vs ⭐${parsed.conCredibility}</span>
+        </div>
+        ${safeJudgeEvidence ? `<div class="judge-evidence">📌 裁判补充: ${safeJudgeEvidence}</div>` : ''}
+        ${safeVerdictReason ? `<div class="verdict-reason">📝 裁决理由: ${safeVerdictReason}</div>` : ''}
+      </div>
     </div>
-    ${judgeBreakdown}
+
+    <!-- 风险提示 -->
+    <div class="risk-section">
+      <h4>⚠️ 风险提示</h4>
+      <div class="judge-risk">${safeCriticalRisk}</div>
+    </div>
+
+    <!-- 裁判信息 -->
+    <div class="judge-info">
+      <span class="judge-label">裁判:</span>
+      <span class="judge-name">${capitalize(judge)}</span>
+    </div>
+
     <details class="verdict-details">
       <summary>查看详细审计报告</summary>
       <div class="full-verdict">
@@ -886,7 +931,10 @@ function showSingleJudgeVerdict(judge, parsed, winner, consensusLevel, riskReaso
 
   document.getElementById('verdict-content').innerHTML = html;
   debateState.active = false;
-  log(`[审计完成] 结果: ${winner}`, consensusLevel === 'risk_flagged' ? 'error' : 'success');
+
+  // 日志显示两个结果
+  log(`[审计完成] 技巧胜方: ${parsed.skillWinner} | 事实倾向: ${parsed.factVerdict}`,
+      consensusLevel === 'risk_flagged' ? 'error' : 'success');
 }
 
 // Keep old function for backwards compatibility (not used with single judge)
@@ -1007,16 +1055,26 @@ function processConsensusVerdict() {
 function parseVerdictResult(verdict) {
   const result = {
     valid: false,
-    winner: '平局',
-    proScore: 0,
-    conScore: 0,
+    // 辩论技巧评分（谁辩得更好）
+    skillWinner: '平局',
+    proSkillScore: 0,
+    conSkillScore: 0,
+    skillComment: '',
+    // 事实裁决（哪个观点更接近真相）
+    factVerdict: '证据不足',
     proCredibility: 0,
     conCredibility: 0,
-    proReasoning: '无',  // 新增：思考整合评估
-    conReasoning: '无',  // 新增：思考整合评估
+    judgeEvidence: '',  // 裁判补充的证据
+    verdictReason: '',  // 裁决理由
+    // 风险提示
     criticalRisk: '无',
+    // 原始数据
     rawText: verdict,
-    parseErrors: []
+    parseErrors: [],
+    // 兼容旧格式的字段（用于显示）
+    winner: '平局',
+    proScore: 0,
+    conScore: 0
   };
 
   // 尝试匹配完整格式（带结束标记）
@@ -1034,46 +1092,95 @@ function parseVerdictResult(verdict) {
 
   const block = blockMatch[1];
 
-  // Extract fields - 容忍 Markdown 格式 (**字段**:, - 字段:, * 字段: 等)
-  // 每个正则支持: 字段:, **字段**:, - 字段:, * **字段**: 等变体
+  // 辅助正则模式：容忍 Markdown 格式（单行）
+  const fieldPattern = (name) => new RegExp(
+    `(?:[-*]?\\s*)?(?:\\*{1,2})?${name}(?:\\*{1,2})?[：:]\\s*(?:\\*{1,2})?(.+?)(?:\\*{1,2})?$`, 'm'
+  );
+  const numberPattern = (name) => new RegExp(
+    `(?:[-*]?\\s*)?(?:\\*{1,2})?${name}(?:\\*{1,2})?[：:]\\s*(?:\\*{1,2})?(\\d+)`
+  );
 
-  // 胜方
-  const winnerMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?胜方(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(.+?)(?:\*{1,2})?$/m);
-  if (winnerMatch) result.winner = winnerMatch[1].trim().replace(/\*+/g, '');
+  // 多行字段解析：捕获到下一个【标题】或字段名之前的所有内容
+  const multiLineFieldPattern = (name) => new RegExp(
+    `(?:[-*]?\\s*)?(?:\\*{1,2})?${name}(?:\\*{1,2})?[：:]\\s*([\\s\\S]*?)(?=(?:【|裁判补充|裁决理由|致命风险|来源可信度|$))`, 'i'
+  );
 
-  // 只要有胜方字段，就认为有效
-  const hasMinimumFields = winnerMatch !== null;
+  // 增强的星级解析：支持 ⭐5, 5星, 5 星, 五星, 4/5 等格式
+  const parseCredibility = (text) => {
+    if (!text) return 0;
+    // 数字格式：5, ⭐5, 5星, 5 星, 4/5
+    const numMatch = text.match(/[⭐★]?\s*(\d)\s*[星\/]?/);
+    if (numMatch) return parseInt(numMatch[1]);
+    // 中文数字格式：一星 到 五星
+    const chineseNums = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5 };
+    const chineseMatch = text.match(/([一二三四五])\s*星/);
+    if (chineseMatch) return chineseNums[chineseMatch[1]] || 0;
+    return 0;
+  };
 
-  // 正方得分 - 提取数字，忽略格式
-  const proScoreMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?正方得分(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(\d+)/);
-  if (proScoreMatch) result.proScore = parseInt(proScoreMatch[1]);
+  // ========== 辩论技巧部分 ==========
 
-  // 反方得分
-  const conScoreMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?反方得分(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(\d+)/);
-  if (conScoreMatch) result.conScore = parseInt(conScoreMatch[1]);
+  // 技巧胜方
+  const skillWinnerMatch = block.match(fieldPattern('技巧胜方'));
+  if (skillWinnerMatch) {
+    result.skillWinner = skillWinnerMatch[1].trim().replace(/\*+/g, '').replace(/\s*\(.*\)/, '');
+  }
 
-  // 来源可信度-正方 - 提取星级数字
-  const proCredMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?来源可信度.?正方(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(\d)/);
-  if (proCredMatch) result.proCredibility = parseInt(proCredMatch[1]);
+  // 正方技巧分
+  const proSkillMatch = block.match(numberPattern('正方技巧分'));
+  if (proSkillMatch) result.proSkillScore = parseInt(proSkillMatch[1]);
 
-  // 来源可信度-反方
-  const conCredMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?来源可信度.?反方(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(\d)/);
-  if (conCredMatch) result.conCredibility = parseInt(conCredMatch[1]);
+  // 反方技巧分
+  const conSkillMatch = block.match(numberPattern('反方技巧分'));
+  if (conSkillMatch) result.conSkillScore = parseInt(conSkillMatch[1]);
 
-  // 思考整合-正方
-  const proReasoningMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?思考整合.?正方(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(有|无)/);
-  if (proReasoningMatch) result.proReasoning = proReasoningMatch[1].trim();
+  // 技巧评语
+  const skillCommentMatch = block.match(fieldPattern('技巧评语'));
+  if (skillCommentMatch) result.skillComment = skillCommentMatch[1].trim().replace(/\*+/g, '');
 
-  // 思考整合-反方
-  const conReasoningMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?思考整合.?反方(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(有|无)/);
-  if (conReasoningMatch) result.conReasoning = conReasoningMatch[1].trim();
+  // ========== 事实裁决部分 ==========
+
+  // 事实倾向
+  const factVerdictMatch = block.match(fieldPattern('事实倾向'));
+  if (factVerdictMatch) {
+    result.factVerdict = factVerdictMatch[1].trim().replace(/\*+/g, '');
+  }
+
+  // 来源可信度-正方（增强解析）
+  const proCredMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?来源可信度.?正方(?:\*{1,2})?[：:]\s*(.+?)$/m);
+  if (proCredMatch) result.proCredibility = parseCredibility(proCredMatch[1]);
+
+  // 来源可信度-反方（增强解析）
+  const conCredMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?来源可信度.?反方(?:\*{1,2})?[：:]\s*(.+?)$/m);
+  if (conCredMatch) result.conCredibility = parseCredibility(conCredMatch[1]);
+
+  // 裁判补充证据（多行支持）
+  const judgeEvidenceMatch = block.match(multiLineFieldPattern('裁判补充证据'));
+  if (judgeEvidenceMatch) {
+    result.judgeEvidence = judgeEvidenceMatch[1].trim().replace(/\*+/g, '').replace(/\n+/g, ' ');
+  }
+
+  // 裁决理由（多行支持）
+  const verdictReasonMatch = block.match(multiLineFieldPattern('裁决理由'));
+  if (verdictReasonMatch) {
+    result.verdictReason = verdictReasonMatch[1].trim().replace(/\*+/g, '').replace(/\n+/g, ' ');
+  }
+
+  // ========== 风险提示 ==========
 
   // 致命风险
-  const riskMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?致命风险(?:\*{1,2})?[：:]\s*(?:\*{1,2})?(.+?)(?:\*{1,2})?$/m);
+  const riskMatch = block.match(fieldPattern('致命风险'));
   if (riskMatch) result.criticalRisk = riskMatch[1].trim().replace(/\*+/g, '');
 
-  // 只要有胜方字段，就认为报告有效（宽松模式）
-  // 这样即使部分字段被截断，也能提取可用信息
+  // ========== 兼容性处理 ==========
+
+  // 设置兼容旧格式的字段
+  result.winner = result.skillWinner;  // 主要胜方使用技巧胜方
+  result.proScore = result.proSkillScore;
+  result.conScore = result.conSkillScore;
+
+  // 判断有效性：只要有技巧胜方或事实倾向字段，就认为有效
+  const hasMinimumFields = skillWinnerMatch !== null || factVerdictMatch !== null;
   result.valid = hasMinimumFields;
 
   return result;

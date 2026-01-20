@@ -1571,6 +1571,116 @@ header .subtitle {
   gap: 2px;
 }
 
+/* ========== 双重评判结果布局 ========== */
+#verdict-content .dual-verdict {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+#verdict-content .verdict-section {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#verdict-content .verdict-section h4 {
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  color: #f3f4f6;
+}
+
+#verdict-content .verdict-section .section-subtitle {
+  margin: 0 0 8px 0;
+  font-size: 10px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+#verdict-content .skill-section {
+  border-left: 3px solid #60a5fa;
+}
+
+#verdict-content .fact-section {
+  border-left: 3px solid #34d399;
+}
+
+#verdict-content .verdict-section .verdict-winner {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+#verdict-content .verdict-section .verdict-scores {
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+#verdict-content .skill-comment {
+  font-size: 11px;
+  color: #d1d5db;
+  background: rgba(96, 165, 250, 0.1);
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+}
+
+#verdict-content .credibility-scores {
+  font-size: 11px;
+  color: #d1d5db;
+}
+
+#verdict-content .credibility-scores.low-credibility {
+  color: #fca5a5;
+}
+
+#verdict-content .judge-evidence {
+  font-size: 11px;
+  color: #86efac;
+  background: rgba(52, 211, 153, 0.1);
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+}
+
+#verdict-content .verdict-reason {
+  font-size: 11px;
+  color: #d1d5db;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+}
+
+#verdict-content .risk-section {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  padding: 10px;
+  margin: 12px 0;
+}
+
+#verdict-content .risk-section h4 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  color: #fca5a5;
+}
+
+#verdict-content .judge-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #9ca3af;
+  margin: 12px 0;
+}
+
+#verdict-content .judge-info .judge-name {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
 @keyframes pulse-red {
   0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
   70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
