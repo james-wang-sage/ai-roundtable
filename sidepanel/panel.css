@@ -108,6 +108,10 @@ header .subtitle {
   color: #3b82f6;
 }
 
+.target-name.grok {
+  color: #f43f5e;
+}
+
 .status {
   font-size: 11px;
   padding: 2px 6px;
@@ -227,6 +231,14 @@ header .subtitle {
 .mention-btn.gemini:hover {
   background: rgba(59, 130, 246, 0.15);
   border-color: #3b82f6;
+}
+
+.mention-btn.grok {
+  color: #f43f5e;
+}
+.mention-btn.grok:hover {
+  background: rgba(244, 63, 94, 0.15);
+  border-color: #f43f5e;
 }
 
 #message-input {
@@ -805,6 +817,7 @@ header .subtitle {
 #summary-content .ai-name.claude { color: #d97706; }
 #summary-content .ai-name.chatgpt { color: #10b981; }
 #summary-content .ai-name.gemini { color: #3b82f6; }
+#summary-content .ai-name.grok { color: #f43f5e; }
 
 #new-discussion-btn {
   width: 100%;
