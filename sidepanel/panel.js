@@ -47,7 +47,7 @@ function prepareResponseForCrossRef(content) {
 }
 
 // Validate prompt length before sending
-function validatePromptLength(message, targets) {
+function validatePromptLength(message) {
   if (message.length > MAX_PROMPT_LENGTH) {
     const overBy = message.length - MAX_PROMPT_LENGTH;
     log(`⚠️ 消息过长 (${message.length} 字符，超出 ${overBy})，请简化内容`, 'error');
@@ -401,7 +401,7 @@ ${source.content}
   }
 
   // Validate total length
-  if (!validatePromptLength(fullMessage, parsed.targetAIs)) {
+  if (!validatePromptLength(fullMessage)) {
     return;
   }
 
@@ -452,7 +452,7 @@ ${responses[sourceAI]}
     evalMessage += `\n${prompt}\n\n请简明扼要地回复，控制在 2000 字以内。`;
 
     // Validate total length
-    if (!validatePromptLength(evalMessage, [targetAI])) {
+    if (!validatePromptLength(evalMessage)) {
       log(`[Mutual] Skipping ${targetAI} - message too long`, 'error');
       continue;
     }
@@ -662,26 +662,28 @@ async function nextRound() {
     discussionState.pendingResponses.clear();
   }
 
-  discussionState.currentRound++;
   const [ai1, ai2] = discussionState.participants;
+  const currentRound = discussionState.currentRound;
+
+  // Check previous round responses BEFORE incrementing round
+  const ai1Response = discussionState.history.find(
+    h => h.round === currentRound && h.ai === ai1
+  )?.content;
+  const ai2Response = discussionState.history.find(
+    h => h.round === currentRound && h.ai === ai2
+  )?.content;
+
+  if (!ai1Response || !ai2Response) {
+    log('缺少当前轮的回复，无法进入下一轮', 'error');
+    return;
+  }
+
+  // Now safe to increment
+  discussionState.currentRound++;
 
   // Update UI
   document.getElementById('round-badge').textContent = `第 ${discussionState.currentRound} 轮`;
   // NOTE: Buttons stay enabled for manual force-continuation
-
-  // Get previous round responses
-  const prevRound = discussionState.currentRound - 1;
-  const ai1Response = discussionState.history.find(
-    h => h.round === prevRound && h.ai === ai1
-  )?.content;
-  const ai2Response = discussionState.history.find(
-    h => h.round === prevRound && h.ai === ai2
-  )?.content;
-
-  if (!ai1Response || !ai2Response) {
-    log('缺少上一轮的回复', 'error');
-    return;
-  }
 
   // Set pending responses
   discussionState.pendingResponses = new Set([ai1, ai2]);
@@ -807,7 +809,7 @@ async function generateSummary() {
 ${historyText}`;
 
   // Validate prompt length
-  if (!validatePromptLength(summaryPrompt, [ai1, ai2])) {
+  if (!validatePromptLength(summaryPrompt)) {
     updateDiscussionStatus('ready', '消息过长，无法生成总结');
     return;
   }
@@ -906,8 +908,7 @@ function resetDiscussion() {
   document.getElementById('discussion-active').classList.add('hidden');
   document.getElementById('discussion-summary').classList.add('hidden');
   document.getElementById('discussion-topic').value = '';
-  document.getElementById('next-round-btn').disabled = true;
-  document.getElementById('generate-summary-btn').disabled = true;
+  // NOTE: Buttons stay enabled for manual force-continuation
 
   log('讨论已结束');
 }

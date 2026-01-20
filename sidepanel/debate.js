@@ -392,19 +392,18 @@ async function nextDebatePhase() {
     return;
   }
 
-  // 防护检查：阶段正在进行中（防止双击）
-  if (debateState.phaseInFlight) {
-    log('[辩论] 当前阶段正在进行，请等待完成', 'error');
-    return;
-  }
-
-  // Allow manual force-continuation: if still waiting, confirm before proceeding
-  if (debateState.pendingResponses.size > 0) {
+  // Allow manual force-continuation: if still waiting OR phase in flight, confirm before proceeding
+  // This allows users to bypass stuck states when monitoring fails
+  if (debateState.phaseInFlight || debateState.pendingResponses.size > 0) {
     const remaining = Array.from(debateState.pendingResponses).map(capitalize).join(', ');
-    if (!confirm(`还在等待 ${remaining} 的回复。\n\n强制进入下一阶段吗？（监控可能出错）`)) {
+    const reason = debateState.phaseInFlight
+      ? (remaining ? `阶段进行中，等待 ${remaining}` : '阶段进行中')
+      : `等待 ${remaining} 的回复`;
+    if (!confirm(`${reason}。\n\n强制进入下一阶段吗？（监控可能出错）`)) {
       return;
     }
-    log(`[辩论] ⚠️ 手动强制进入下一阶段，跳过 ${remaining}`, 'error');
+    log(`[辩论] ⚠️ 手动强制进入下一阶段`, 'error');
+    debateState.phaseInFlight = false;  // Clear the lock
     debateState.pendingResponses.clear();
   }
 
