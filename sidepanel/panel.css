@@ -1667,6 +1667,12 @@ header .subtitle {
   color: #fca5a5;
 }
 
+#verdict-content .risk-section .missing-factors {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #fbbf24;
+}
+
 #verdict-content .judge-info {
   display: flex;
   align-items: center;

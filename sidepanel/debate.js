@@ -731,28 +731,30 @@ ${'='.repeat(50)}
 
 ⚠️ 【极重要】请在回复最后，严格按以下格式输出结果：
 - 不要使用Markdown代码块
-- 必须包含开头和结尾标记
+- 三个区块必须用指定的分隔符包裹
 - 所有字段必须填写
 
-===审计结果===
-【辩论技巧】
-技巧胜方：[正方/反方/平局] (谁辩得更好)
+<<<辩论技巧>>>
+技巧胜方：[正方/反方/平局]
 正方技巧分：[0-100]
 反方技巧分：[0-100]
 技巧评语：[一句话点评辩论表现]
+<<</辩论技巧>>>
 
-【事实裁决】
+<<<事实裁决>>>
 事实倾向：[正方观点/反方观点/证据不足/各有道理]
 来源可信度-正方：[1-5]星
 来源可信度-反方：[1-5]星
 裁判补充证据：[你自己搜集到的关键信息，简述]
 裁决理由：[基于事实和推理，为什么倾向这一方]
+<<</事实裁决>>>
 
-【风险提示】
-致命风险：[一句话描述]
-===============
+<<<风险提示>>>
+致命风险：[一句话描述最大风险]
+遗漏因素：[双方都忽略的重要因素，如无则填"无"]
+<<</风险提示>>>
 
-⚠️ 缺少结尾 =============== 将导致结果无效！`;
+⚠️ 缺少任何一个区块的结束标记将导致解析失败！`;
 
   log(`[审计] 裁判 ${capitalize(judge)} 正在进行尽职调查...`);
 
@@ -876,6 +878,7 @@ function showSingleJudgeVerdict(judge, parsed, consensusLevel, riskReason) {
   const safeJudgeEvidence = escapeHtml(parsed.judgeEvidence);
   const safeVerdictReason = escapeHtml(parsed.verdictReason);
   const safeCriticalRisk = escapeHtml(parsed.criticalRisk);
+  const safeMissingFactors = escapeHtml(parsed.missingFactors);
   const safeRiskReason = escapeHtml(riskReason);
 
   let html = `
@@ -912,7 +915,8 @@ function showSingleJudgeVerdict(judge, parsed, consensusLevel, riskReason) {
     <!-- 风险提示 -->
     <div class="risk-section">
       <h4>⚠️ 风险提示</h4>
-      <div class="judge-risk">${safeCriticalRisk}</div>
+      <div class="judge-risk"><strong>致命风险：</strong>${safeCriticalRisk}</div>
+      ${safeMissingFactors && safeMissingFactors !== '无' ? `<div class="missing-factors"><strong>遗漏因素：</strong>${safeMissingFactors}</div>` : ''}
     </div>
 
     <!-- 裁判信息 -->
@@ -1068,29 +1072,21 @@ function parseVerdictResult(verdict) {
     verdictReason: '',  // 裁决理由
     // 风险提示
     criticalRisk: '无',
+    missingFactors: '',  // 双方遗漏的因素
     // 原始数据
     rawText: verdict,
     parseErrors: [],
+    // 区块原始内容（用于UI显示）
+    sections: {
+      skill: null,
+      fact: null,
+      risk: null
+    },
     // 兼容旧格式的字段（用于显示）
     winner: '平局',
     proScore: 0,
     conScore: 0
   };
-
-  // 尝试匹配完整格式（带结束标记）
-  let blockMatch = verdict.match(/={3,}审计结果={3,}([\s\S]*?)={10,}/);
-
-  // 如果没有结束标记，尝试宽松匹配（从 ===审计结果=== 到文末）
-  if (!blockMatch) {
-    blockMatch = verdict.match(/={3,}审计结果={3,}([\s\S]*?)$/);
-  }
-
-  if (!blockMatch) {
-    result.parseErrors.push('Missing audit block');
-    return result;
-  }
-
-  const block = blockMatch[1];
 
   // 辅助正则模式：容忍 Markdown 格式（单行）
   const fieldPattern = (name) => new RegExp(
@@ -1098,11 +1094,6 @@ function parseVerdictResult(verdict) {
   );
   const numberPattern = (name) => new RegExp(
     `(?:[-*]?\\s*)?(?:\\*{1,2})?${name}(?:\\*{1,2})?[：:]\\s*(?:\\*{1,2})?(\\d+)`
-  );
-
-  // 多行字段解析：捕获到下一个【标题】或字段名之前的所有内容
-  const multiLineFieldPattern = (name) => new RegExp(
-    `(?:[-*]?\\s*)?(?:\\*{1,2})?${name}(?:\\*{1,2})?[：:]\\s*([\\s\\S]*?)(?=(?:【|裁判补充|裁决理由|致命风险|来源可信度|$))`, 'i'
   );
 
   // 增强的星级解析：支持 ⭐5, 5星, 5 星, 五星, 4/5 等格式
@@ -1118,59 +1109,125 @@ function parseVerdictResult(verdict) {
     return 0;
   };
 
-  // ========== 辩论技巧部分 ==========
+  // ========== 尝试新格式：3个独立区块 ==========
+  const skillBlock = verdict.match(/<<<辩论技巧>>>([\s\S]*?)<<<\/辩论技巧>>>/);
+  const factBlock = verdict.match(/<<<事实裁决>>>([\s\S]*?)<<<\/事实裁决>>>/);
+  const riskBlock = verdict.match(/<<<风险提示>>>([\s\S]*?)<<<\/风险提示>>>/);
 
-  // 技巧胜方
-  const skillWinnerMatch = block.match(fieldPattern('技巧胜方'));
-  if (skillWinnerMatch) {
-    result.skillWinner = skillWinnerMatch[1].trim().replace(/\*+/g, '').replace(/\s*\(.*\)/, '');
+  const useNewFormat = skillBlock || factBlock || riskBlock;
+
+  if (useNewFormat) {
+    // 保存区块原始内容
+    if (skillBlock) result.sections.skill = skillBlock[1].trim();
+    if (factBlock) result.sections.fact = factBlock[1].trim();
+    if (riskBlock) result.sections.risk = riskBlock[1].trim();
+
+    // 解析辩论技巧区块
+    if (skillBlock) {
+      const block = skillBlock[1];
+      const winnerMatch = block.match(fieldPattern('技巧胜方'));
+      if (winnerMatch) result.skillWinner = winnerMatch[1].trim().replace(/\*+/g, '');
+
+      const proSkillMatch = block.match(numberPattern('正方技巧分'));
+      if (proSkillMatch) result.proSkillScore = parseInt(proSkillMatch[1]);
+
+      const conSkillMatch = block.match(numberPattern('反方技巧分'));
+      if (conSkillMatch) result.conSkillScore = parseInt(conSkillMatch[1]);
+
+      const commentMatch = block.match(fieldPattern('技巧评语'));
+      if (commentMatch) result.skillComment = commentMatch[1].trim().replace(/\*+/g, '');
+    }
+
+    // 解析事实裁决区块
+    if (factBlock) {
+      const block = factBlock[1];
+      const verdictMatch = block.match(fieldPattern('事实倾向'));
+      if (verdictMatch) result.factVerdict = verdictMatch[1].trim().replace(/\*+/g, '');
+
+      const proCredMatch = block.match(/来源可信度.?正方[：:]\s*(.+?)$/m);
+      if (proCredMatch) result.proCredibility = parseCredibility(proCredMatch[1]);
+
+      const conCredMatch = block.match(/来源可信度.?反方[：:]\s*(.+?)$/m);
+      if (conCredMatch) result.conCredibility = parseCredibility(conCredMatch[1]);
+
+      const evidenceMatch = block.match(/裁判补充证据[：:]\s*(.+?)$/m);
+      if (evidenceMatch) result.judgeEvidence = evidenceMatch[1].trim().replace(/\*+/g, '');
+
+      const reasonMatch = block.match(/裁决理由[：:]\s*(.+?)$/m);
+      if (reasonMatch) result.verdictReason = reasonMatch[1].trim().replace(/\*+/g, '');
+    }
+
+    // 解析风险提示区块
+    if (riskBlock) {
+      const block = riskBlock[1];
+      const riskMatch = block.match(fieldPattern('致命风险'));
+      if (riskMatch) result.criticalRisk = riskMatch[1].trim().replace(/\*+/g, '');
+
+      const missingMatch = block.match(fieldPattern('遗漏因素'));
+      if (missingMatch) result.missingFactors = missingMatch[1].trim().replace(/\*+/g, '');
+    }
+
+    // 新格式有效性：至少解析到一个区块
+    result.valid = skillBlock !== null || factBlock !== null;
+
+  } else {
+    // ========== 回退到旧格式 ==========
+    let blockMatch = verdict.match(/={3,}审计结果={3,}([\s\S]*?)={10,}/);
+    if (!blockMatch) {
+      blockMatch = verdict.match(/={3,}审计结果={3,}([\s\S]*?)$/);
+    }
+
+    if (!blockMatch) {
+      result.parseErrors.push('Missing audit block (neither new nor old format found)');
+      return result;
+    }
+
+    const block = blockMatch[1];
+
+    // 多行字段解析
+    const multiLineFieldPattern = (name) => new RegExp(
+      `(?:[-*]?\\s*)?(?:\\*{1,2})?${name}(?:\\*{1,2})?[：:]\\s*([\\s\\S]*?)(?=(?:【|裁判补充|裁决理由|致命风险|遗漏因素|来源可信度|$))`, 'i'
+    );
+
+    // 辩论技巧
+    const skillWinnerMatch = block.match(fieldPattern('技巧胜方'));
+    if (skillWinnerMatch) result.skillWinner = skillWinnerMatch[1].trim().replace(/\*+/g, '').replace(/\s*\(.*\)/, '');
+
+    const proSkillMatch = block.match(numberPattern('正方技巧分'));
+    if (proSkillMatch) result.proSkillScore = parseInt(proSkillMatch[1]);
+
+    const conSkillMatch = block.match(numberPattern('反方技巧分'));
+    if (conSkillMatch) result.conSkillScore = parseInt(conSkillMatch[1]);
+
+    const skillCommentMatch = block.match(fieldPattern('技巧评语'));
+    if (skillCommentMatch) result.skillComment = skillCommentMatch[1].trim().replace(/\*+/g, '');
+
+    // 事实裁决
+    const factVerdictMatch = block.match(fieldPattern('事实倾向'));
+    if (factVerdictMatch) result.factVerdict = factVerdictMatch[1].trim().replace(/\*+/g, '');
+
+    const proCredMatch = block.match(/来源可信度.?正方[：:]\s*(.+?)$/m);
+    if (proCredMatch) result.proCredibility = parseCredibility(proCredMatch[1]);
+
+    const conCredMatch = block.match(/来源可信度.?反方[：:]\s*(.+?)$/m);
+    if (conCredMatch) result.conCredibility = parseCredibility(conCredMatch[1]);
+
+    const judgeEvidenceMatch = block.match(multiLineFieldPattern('裁判补充证据'));
+    if (judgeEvidenceMatch) result.judgeEvidence = judgeEvidenceMatch[1].trim().replace(/\*+/g, '').replace(/\n+/g, ' ');
+
+    const verdictReasonMatch = block.match(multiLineFieldPattern('裁决理由'));
+    if (verdictReasonMatch) result.verdictReason = verdictReasonMatch[1].trim().replace(/\*+/g, '').replace(/\n+/g, ' ');
+
+    // 风险提示
+    const riskMatch = block.match(fieldPattern('致命风险'));
+    if (riskMatch) result.criticalRisk = riskMatch[1].trim().replace(/\*+/g, '');
+
+    const missingMatch = block.match(fieldPattern('遗漏因素'));
+    if (missingMatch) result.missingFactors = missingMatch[1].trim().replace(/\*+/g, '');
+
+    // 旧格式有效性
+    result.valid = skillWinnerMatch !== null || factVerdictMatch !== null;
   }
-
-  // 正方技巧分
-  const proSkillMatch = block.match(numberPattern('正方技巧分'));
-  if (proSkillMatch) result.proSkillScore = parseInt(proSkillMatch[1]);
-
-  // 反方技巧分
-  const conSkillMatch = block.match(numberPattern('反方技巧分'));
-  if (conSkillMatch) result.conSkillScore = parseInt(conSkillMatch[1]);
-
-  // 技巧评语
-  const skillCommentMatch = block.match(fieldPattern('技巧评语'));
-  if (skillCommentMatch) result.skillComment = skillCommentMatch[1].trim().replace(/\*+/g, '');
-
-  // ========== 事实裁决部分 ==========
-
-  // 事实倾向
-  const factVerdictMatch = block.match(fieldPattern('事实倾向'));
-  if (factVerdictMatch) {
-    result.factVerdict = factVerdictMatch[1].trim().replace(/\*+/g, '');
-  }
-
-  // 来源可信度-正方（增强解析）
-  const proCredMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?来源可信度.?正方(?:\*{1,2})?[：:]\s*(.+?)$/m);
-  if (proCredMatch) result.proCredibility = parseCredibility(proCredMatch[1]);
-
-  // 来源可信度-反方（增强解析）
-  const conCredMatch = block.match(/(?:[-*]?\s*)?(?:\*{1,2})?来源可信度.?反方(?:\*{1,2})?[：:]\s*(.+?)$/m);
-  if (conCredMatch) result.conCredibility = parseCredibility(conCredMatch[1]);
-
-  // 裁判补充证据（多行支持）
-  const judgeEvidenceMatch = block.match(multiLineFieldPattern('裁判补充证据'));
-  if (judgeEvidenceMatch) {
-    result.judgeEvidence = judgeEvidenceMatch[1].trim().replace(/\*+/g, '').replace(/\n+/g, ' ');
-  }
-
-  // 裁决理由（多行支持）
-  const verdictReasonMatch = block.match(multiLineFieldPattern('裁决理由'));
-  if (verdictReasonMatch) {
-    result.verdictReason = verdictReasonMatch[1].trim().replace(/\*+/g, '').replace(/\n+/g, ' ');
-  }
-
-  // ========== 风险提示 ==========
-
-  // 致命风险
-  const riskMatch = block.match(fieldPattern('致命风险'));
-  if (riskMatch) result.criticalRisk = riskMatch[1].trim().replace(/\*+/g, '');
 
   // ========== 兼容性处理 ==========
 
