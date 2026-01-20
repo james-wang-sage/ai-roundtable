@@ -223,9 +223,8 @@ async function startDebate() {
   document.getElementById('judge-tags').textContent = capitalize(judgeAI);
   updateDebateStatus('waiting', `【立论准备】双方正在并行准备立论...`);
 
-  // Disable buttons during phase
-  document.getElementById('next-phase-btn').disabled = true;
-  document.getElementById('request-verdict-btn').disabled = true;
+  // NOTE: Buttons stay enabled for manual force-continuation if monitoring fails
+  // Users can click to proceed manually if response capture times out
 
   log(`辩论开始: ${capitalize(proAI)} (正方) vs ${capitalize(conAI)} (反方)`, 'success');
   log(`[混合模式] 双方并行准备立论中...`);
@@ -368,9 +367,7 @@ function onDebatePhaseComplete() {
   // 阶段完成，解除锁定
   debateState.phaseInFlight = false;
 
-  // Enable buttons
-  document.getElementById('next-phase-btn').disabled = false;
-  document.getElementById('request-verdict-btn').disabled = false;
+  // NOTE: Buttons stay enabled throughout for manual force-continuation
 
   // Update next phase button text
   const nextPhaseIndex = debateState.currentPhase + 1;
@@ -379,7 +376,6 @@ function onDebatePhaseComplete() {
     document.getElementById('next-phase-btn').textContent = `进入${nextPhaseName}`;
     updateDebateStatus('ready', `${phaseName}完成 → 点击进入${nextPhaseName}`);
   } else {
-    document.getElementById('next-phase-btn').disabled = true;
     document.getElementById('next-phase-btn').textContent = '辩论已完成';
     updateDebateStatus('ready', '所有阶段完成，可以请求裁决');
   }
@@ -402,11 +398,14 @@ async function nextDebatePhase() {
     return;
   }
 
-  // 防护检查：还有未完成的回复
+  // Allow manual force-continuation: if still waiting, confirm before proceeding
   if (debateState.pendingResponses.size > 0) {
     const remaining = Array.from(debateState.pendingResponses).map(capitalize).join(', ');
-    log(`[辩论] 还在等待 ${remaining} 的回复`, 'error');
-    return;
+    if (!confirm(`还在等待 ${remaining} 的回复。\n\n强制进入下一阶段吗？（监控可能出错）`)) {
+      return;
+    }
+    log(`[辩论] ⚠️ 手动强制进入下一阶段，跳过 ${remaining}`, 'error');
+    debateState.pendingResponses.clear();
   }
 
   debateState.currentPhase++;
@@ -423,10 +422,10 @@ async function nextDebatePhase() {
   const phaseDisplayName = DEBATE_PHASE_NAMES[phaseName];
   const debaterPosition = getPhaseDebater(phaseName);
 
-  // Update UI - 立即禁用按钮防止双击
+  // Update UI
   document.getElementById('phase-badge').textContent = phaseDisplayName;
-  document.getElementById('next-phase-btn').disabled = true;
-  document.getElementById('request-verdict-btn').disabled = true;
+  // NOTE: Buttons stay enabled for manual force-continuation if monitoring fails
+  // phaseInFlight flag prevents accidental double-clicks
 
   // 根据阶段类型决定发言方
   if (debaterPosition === 'both') {
@@ -697,7 +696,17 @@ ${proResponse || '暂无回复'}
 // ============================================
 
 async function requestVerdict() {
-  document.getElementById('request-verdict-btn').disabled = true;
+  // Allow manual force-continuation: if still waiting for debate responses, confirm
+  if (debateState.pendingResponses.size > 0) {
+    const remaining = Array.from(debateState.pendingResponses).map(capitalize).join(', ');
+    if (!confirm(`还在等待 ${remaining} 的回复。\n\n强制请求裁决吗？（监控可能出错）`)) {
+      return;
+    }
+    log(`[辩论] ⚠️ 手动强制请求裁决，跳过 ${remaining}`, 'error');
+    debateState.pendingResponses.clear();
+  }
+
+  // NOTE: Button stays enabled for retry if verdict polling fails
   updateDebateStatus('waiting', '正在进行高标准尽职调查 (Due Diligence)...');
 
   // Use the user-selected judge
@@ -802,7 +811,6 @@ ${'='.repeat(50)}
   if (!sendResult) {
     log(`[审计] ❌ 无法向 ${capitalize(judge)} 发送审计请求，请检查该AI标签页是否打开`, 'error');
     updateDebateStatus('ready', '发送失败，请重试');
-    document.getElementById('request-verdict-btn').disabled = false;
     return;
   }
 
@@ -866,8 +874,8 @@ ${'='.repeat(50)}
     if (attempts >= maxAttempts) {
       cleanupVerdictPolling();
       log(`[审计] 超时，${capitalize(judge)} 未能提交报告`, 'error');
-      updateDebateStatus('ready', '审计超时，请重试');
-      document.getElementById('request-verdict-btn').disabled = false;
+      updateDebateStatus('ready', '审计超时，可点击重试');
+      // Button stays enabled for retry
     }
   }, 2000);
 }
@@ -1447,9 +1455,8 @@ function resetDebate() {
   document.getElementById('debate-active').classList.add('hidden');
   document.getElementById('debate-verdict').classList.add('hidden');
   document.getElementById('debate-topic').value = '';
-  document.getElementById('next-phase-btn').disabled = true;
   document.getElementById('next-phase-btn').textContent = '下一阶段';
-  document.getElementById('request-verdict-btn').disabled = true;
+  // NOTE: Buttons stay enabled for future debates
 
   log('辩论已结束');
 }

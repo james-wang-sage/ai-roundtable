@@ -2,6 +2,60 @@
 
 const AI_TYPES = ['claude', 'chatgpt', 'gemini', 'grok'];
 
+// Prompt size limits
+const MAX_PROMPT_LENGTH = 150000;  // 150K character limit
+const RESPONSE_CAP = 20000;       // Cap individual responses at 20K
+
+// De-duplication: Remove repeated paragraphs/sections from combined content
+function deduplicateContent(content) {
+  if (!content) return content;
+
+  // Split into paragraphs (2+ newlines)
+  const paragraphs = content.split(/\n{2,}/);
+  const seen = new Set();
+  const unique = [];
+
+  for (const para of paragraphs) {
+    const normalized = para.trim().toLowerCase();
+    // Skip short lines (likely formatting) or duplicates
+    if (normalized.length < 50) {
+      unique.push(para);
+      continue;
+    }
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      unique.push(para);
+    }
+  }
+
+  return unique.join('\n\n');
+}
+
+// Cap and dedupe a response before including in cross-reference
+function prepareResponseForCrossRef(content) {
+  if (!content) return content;
+
+  // First deduplicate
+  let processed = deduplicateContent(content);
+
+  // Then cap at 20K if still too long
+  if (processed.length > RESPONSE_CAP) {
+    processed = processed.substring(0, RESPONSE_CAP) + '\n\n[... 截断至 20K 字符 ...]';
+  }
+
+  return processed;
+}
+
+// Validate prompt length before sending
+function validatePromptLength(message, targets) {
+  if (message.length > MAX_PROMPT_LENGTH) {
+    const overBy = message.length - MAX_PROMPT_LENGTH;
+    log(`⚠️ 消息过长 (${message.length} 字符，超出 ${overBy})，请简化内容`, 'error');
+    return false;
+  }
+  return true;
+}
+
 // Cross-reference action keywords (inserted into message)
 const CROSS_REF_ACTIONS = {
   evaluate: { prompt: '评价一下' },
@@ -331,17 +385,24 @@ async function handleCrossReference(parsed) {
       log(`Could not get ${sourceAI}'s response`, 'error');
       return;
     }
-    sourceResponses.push({ ai: sourceAI, content: response });
+    // Dedupe and cap each response
+    const processed = prepareResponseForCrossRef(response);
+    sourceResponses.push({ ai: sourceAI, content: processed });
   }
 
   // Build the full message with XML tags for each source
-  let fullMessage = parsed.originalMessage + '\n';
+  let fullMessage = parsed.originalMessage + '\n\n请简明扼要地回复，控制在 2000 字以内。\n';
 
   for (const source of sourceResponses) {
     fullMessage += `
 <${source.ai}_response>
 ${source.content}
 </${source.ai}_response>`;
+  }
+
+  // Validate total length
+  if (!validatePromptLength(fullMessage, parsed.targetAIs)) {
+    return;
   }
 
   // Send to all target AIs
@@ -366,8 +427,9 @@ async function handleMutualReview(participants, prompt) {
       log(`[Mutual] Could not get ${ai}'s response - make sure ${ai} has replied first`, 'error');
       return;
     }
-    responses[ai] = response;
-    log(`[Mutual] Got ${ai}'s response (${response.length} chars)`);
+    // Dedupe and cap each response
+    responses[ai] = prepareResponseForCrossRef(response);
+    log(`[Mutual] Got ${ai}'s response (${responses[ai].length} chars)`);
   }
 
   log(`[Mutual] All responses collected. Sending cross-evaluations...`);
@@ -387,7 +449,13 @@ ${responses[sourceAI]}
 `;
     }
 
-    evalMessage += `\n${prompt}`;
+    evalMessage += `\n${prompt}\n\n请简明扼要地回复，控制在 2000 字以内。`;
+
+    // Validate total length
+    if (!validatePromptLength(evalMessage, [targetAI])) {
+      log(`[Mutual] Skipping ${targetAI} - message too long`, 'error');
+      continue;
+    }
 
     log(`[Mutual] Sending to ${targetAI}: ${otherAIs.join('+')} responses + prompt`);
     await sendToAI(targetAI, evalMessage);
@@ -538,9 +606,8 @@ async function startDiscussion() {
   document.getElementById('topic-display').textContent = topic;
   updateDiscussionStatus('waiting', `等待 ${selected.join(' 和 ')} 的初始回复...`);
 
-  // Disable buttons during round
-  document.getElementById('next-round-btn').disabled = true;
-  document.getElementById('generate-summary-btn').disabled = true;
+  // NOTE: Buttons stay enabled for manual force-continuation if monitoring fails
+  // Users can click to proceed manually if response capture times out
 
   log(`讨论开始: ${selected.join(' vs ')}`, 'success');
 
@@ -585,13 +652,22 @@ function onRoundComplete() {
 }
 
 async function nextRound() {
+  // Allow manual force-continuation: if still waiting, confirm before proceeding
+  if (discussionState.pendingResponses.size > 0) {
+    const remaining = Array.from(discussionState.pendingResponses).map(capitalize).join(', ');
+    if (!confirm(`还在等待 ${remaining} 的回复。\n\n强制进入下一轮吗？（监控可能出错）`)) {
+      return;
+    }
+    log(`[讨论] ⚠️ 手动强制进入下一轮，跳过 ${remaining}`, 'error');
+    discussionState.pendingResponses.clear();
+  }
+
   discussionState.currentRound++;
   const [ai1, ai2] = discussionState.participants;
 
   // Update UI
   document.getElementById('round-badge').textContent = `第 ${discussionState.currentRound} 轮`;
-  document.getElementById('next-round-btn').disabled = true;
-  document.getElementById('generate-summary-btn').disabled = true;
+  // NOTE: Buttons stay enabled for manual force-continuation
 
   // Get previous round responses
   const prevRound = discussionState.currentRound - 1;
@@ -700,19 +776,22 @@ ${ai1Response}
 }
 
 async function generateSummary() {
-  document.getElementById('generate-summary-btn').disabled = true;
   updateDiscussionStatus('waiting', '正在请求双方生成总结...');
 
   const [ai1, ai2] = discussionState.participants;
 
-  // Build conversation history for summary
+  // Build conversation history for summary (dedupe and cap each entry)
   let historyText = `主题: ${discussionState.topic}\n\n`;
 
   for (let round = 1; round <= discussionState.currentRound; round++) {
     historyText += `=== 第 ${round} 轮 ===\n\n`;
     const roundEntries = discussionState.history.filter(h => h.round === round);
     for (const entry of roundEntries) {
-      historyText += `[${capitalize(entry.ai)}]:\n${entry.content}\n\n`;
+      // Cap each historical entry to prevent bloat
+      const cappedContent = entry.content.length > 5000
+        ? entry.content.substring(0, 5000) + '\n[... 截断 ...]'
+        : entry.content;
+      historyText += `[${capitalize(entry.ai)}]:\n${cappedContent}\n\n`;
     }
   }
 
@@ -722,8 +801,16 @@ async function generateSummary() {
 3. 各方的核心观点
 4. 总体结论
 
+请简明扼要，总结控制在 1500 字以内。
+
 讨论历史：
 ${historyText}`;
+
+  // Validate prompt length
+  if (!validatePromptLength(summaryPrompt, [ai1, ai2])) {
+    updateDiscussionStatus('ready', '消息过长，无法生成总结');
+    return;
+  }
 
   // Send to both AIs
   discussionState.roundType = 'summary';

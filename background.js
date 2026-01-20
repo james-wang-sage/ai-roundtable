@@ -14,8 +14,16 @@ async function getStoredResponses() {
   return result.latestResponses || { claude: null, chatgpt: null, gemini: null, grok: null };
 }
 
+// Response size limit: 20K characters to prevent prompt bloat in cross-references
+const RESPONSE_CAP = 20000;
+
 async function setStoredResponse(aiType, content) {
   const responses = await getStoredResponses();
+  // Cap response at 20K to prevent cross-reference prompts from exceeding limits
+  if (content && content.length > RESPONSE_CAP) {
+    console.log(`[AI Panel] Capping ${aiType} response from ${content.length} to ${RESPONSE_CAP} chars`);
+    content = content.substring(0, RESPONSE_CAP) + '\n\n[... 回复过长，已截断至 20K 字符 ...]';
+  }
   responses[aiType] = content;
   await chrome.storage.session.set({ latestResponses: responses });
 }
