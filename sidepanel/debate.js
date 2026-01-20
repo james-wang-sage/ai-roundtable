@@ -529,8 +529,9 @@ async function requestVerdict() {
   document.getElementById('request-verdict-btn').disabled = true;
   updateDebateStatus('waiting', '正在进行高标准尽职调查 (Due Diligence)...');
 
-  // ALL 3 AIs will judge for consensus
-  const allJudges = ['claude', 'chatgpt', 'gemini'];
+  // Only the 3rd AI (non-debater) acts as judge - avoids conflict of interest
+  const allAIs = ['claude', 'chatgpt', 'gemini'];
+  const allJudges = allAIs.filter(ai => ai !== debateState.proAI && ai !== debateState.conAI);
 
   // Build full debate transcript
   const transcript = debateState.history.map(h => {
@@ -597,7 +598,8 @@ ${'='.repeat(50)}
 
 ⚠️ 如果缺少结尾的 =============== 将导致审计结果无效！`;
 
-  log(`[审计] 已启动多重风险审查机制 (Claude, ChatGPT, Gemini)...`);
+  const judgeName = allJudges.length > 0 ? capitalize(allJudges[0]) : '无可用裁判';
+  log(`[审计] 裁判 ${judgeName} 正在进行尽职调查...`);
 
   // Initialize verdict collection
   debateState.verdicts = {};
@@ -664,99 +666,80 @@ function processConsensusVerdict() {
   const verdicts = debateState.verdicts;
   const allJudges = Object.keys(verdicts);
 
-  log(`[共识] 正在进行风险加权分析...`);
+  log(`[裁决] 正在分析裁判报告...`);
 
-  // Parse each verdict
+  // Parse the verdict (now single judge)
   const parsedVerdicts = {};
-  const validJudges = [];
+  let validJudge = null;
 
   for (const judge of allJudges) {
     parsedVerdicts[judge] = parseVerdictResult(verdicts[judge]);
     if (parsedVerdicts[judge].valid) {
-      validJudges.push(judge);
+      validJudge = judge;
     } else {
-      log(`[共识] ⚠️ ${capitalize(judge)} 报告格式无效`, 'error');
+      log(`[裁决] ⚠️ ${capitalize(judge)} 报告格式无效`, 'error');
     }
   }
 
-  const totalValid = validJudges.length;
-
-  if (totalValid === 0) {
-    log('[共识] ❌ 没有有效审计报告', 'error');
-    showConsensusVerdict(parsedVerdicts, '无法判定', 'invalid', { '正方': 0, '反方': 0, '平局': 0 }, totalValid);
+  if (!validJudge) {
+    log('[裁决] ❌ 没有有效审计报告', 'error');
+    showConsensusVerdict(parsedVerdicts, '无法判定', 'invalid', { '正方': 0, '反方': 0, '平局': 0 }, 0);
     return;
   }
+
+  const v = parsedVerdicts[validJudge];
 
   // --- STRICT RELIABILITY CHECK (The "Veto" Logic) ---
   let riskFlag = false;
   let riskReason = '';
 
   // 1. Check for Low Credibility Sources (<= 2 stars)
-  for (const judge of validJudges) {
-    const v = parsedVerdicts[judge];
-    if (v.proCredibility <= 2 || v.conCredibility <= 2) {
-      riskFlag = true;
-      riskReason = '来源可信度过低 (存在虚假或低质来源)';
-      break;
-    }
+  if (v.proCredibility <= 2 || v.conCredibility <= 2) {
+    riskFlag = true;
+    riskReason = '来源可信度过低 (存在虚假或低质来源)';
   }
 
-  // 2. Check for Missing Reasoning Integration (新增：思考整合检查)
-  if (!riskFlag) {
-    let proNoReasoning = 0, conNoReasoning = 0;
-    for (const judge of validJudges) {
-      const v = parsedVerdicts[judge];
-      if (v.proReasoning === '无') proNoReasoning++;
-      if (v.conReasoning === '无') conNoReasoning++;
-    }
-    // If majority of judges say both sides lack reasoning, flag it
-    if (proNoReasoning >= Math.ceil(totalValid / 2) && conNoReasoning >= Math.ceil(totalValid / 2)) {
-      riskFlag = true;
-      riskReason = '双方均缺乏思考整合 (仅罗列论据，无深度推理)';
-    }
+  // 2. Check for Missing Reasoning Integration (思考整合检查)
+  if (!riskFlag && v.proReasoning === '无' && v.conReasoning === '无') {
+    riskFlag = true;
+    riskReason = '双方均缺乏思考整合 (仅罗列论据，无深度推理)';
   }
 
-  // 3. Check for Low Scores (< 60 is failing, < 75 is weak)
-  const avgProScore = validJudges.reduce((s, j) => s + parsedVerdicts[j].proScore, 0) / totalValid;
-  const avgConScore = validJudges.reduce((s, j) => s + parsedVerdicts[j].conScore, 0) / totalValid;
-
-  if (!riskFlag && avgProScore < 70 && avgConScore < 70) {
+  // 3. Check for Low Scores (< 70 is weak)
+  if (!riskFlag && v.proScore < 70 && v.conScore < 70) {
     riskFlag = true;
     riskReason = '双方论证质量均未达到决策标准 (<70分)';
   }
 
-  // --- DETERMINE WINNER ---
+  // --- DETERMINE WINNER (single judge decision) ---
   const winnerVotes = { '正方': 0, '反方': 0, '平局': 0, '资料不足': 0 };
-  for (const judge of validJudges) {
-    const winner = parsedVerdicts[judge].winner;
-    if (winnerVotes.hasOwnProperty(winner)) {
-      winnerVotes[winner]++;
-    } else {
-      winnerVotes['资料不足'] = (winnerVotes['资料不足'] || 0) + 1;
-    }
+  if (winnerVotes.hasOwnProperty(v.winner)) {
+    winnerVotes[v.winner] = 1;
+  } else {
+    winnerVotes['资料不足'] = 1;
   }
 
-  let consensusWinner = '资料不足';
-  let consensusLevel = 'disputed';
+  let consensusWinner = v.winner;
+  let consensusLevel = 'single_judge';
 
   if (riskFlag) {
     consensusWinner = '高风险/资料不足';
     consensusLevel = 'risk_flagged';
+  } else if (v.winner === '正方' && v.proScore > 75) {
+    consensusWinner = '正方';
+    consensusLevel = 'single_judge';
+  } else if (v.winner === '反方' && v.conScore > 75) {
+    consensusWinner = '反方';
+    consensusLevel = 'single_judge';
+  } else if (v.winner === '平局') {
+    consensusWinner = '平局';
+    consensusLevel = 'disputed';
   } else {
-    // Normal consensus logic, but strict
-    if (winnerVotes['正方'] >= 2 && avgProScore > 75) {
-      consensusWinner = '正方';
-      consensusLevel = winnerVotes['正方'] === totalValid ? 'unanimous' : 'majority';
-    } else if (winnerVotes['反方'] >= 2 && avgConScore > 75) {
-      consensusWinner = '反方';
-      consensusLevel = winnerVotes['反方'] === totalValid ? 'unanimous' : 'majority';
-    } else {
-      consensusWinner = '平局/需进一步研究';
-      consensusLevel = 'disputed';
-    }
+    consensusWinner = v.winner || '需进一步研究';
+    consensusLevel = 'disputed';
   }
 
-  showConsensusVerdict(parsedVerdicts, consensusWinner, consensusLevel, winnerVotes, totalValid, riskReason);
+  showConsensusVerdict(parsedVerdicts, consensusWinner, consensusLevel, winnerVotes, 1, riskReason);
 }
 
 function parseVerdictResult(verdict) {
@@ -855,6 +838,7 @@ function showConsensusVerdict(parsedVerdicts, consensusWinner, consensusLevel, v
   else if (consensusWinner.includes('风险') || consensusWinner.includes('资料不足')) winnerClass = 'risk';
 
   const consensusLabels = {
+    single_judge: '⚖️ 裁判裁决',
     unanimous: '🏆 权威认证 (全票通过)',
     majority: '✅ 多数通过',
     risk_flagged: '⛔️ 风险警报 (自动熔断)',
@@ -871,8 +855,8 @@ function showConsensusVerdict(parsedVerdicts, consensusWinner, consensusLevel, v
     headerHtml += `<div class="risk-alert">⚠️ 熔断原因: ${riskReason}</div>`;
   }
 
-  // Judge Cards
-  let judgeBreakdown = '<div class="judge-breakdown"><h4>独立的审计意见：</h4>';
+  // Judge Card (single impartial judge)
+  let judgeBreakdown = '<div class="judge-breakdown"><h4>裁判审计报告：</h4>';
   for (const judge of judges) {
     const v = parsedVerdicts[judge];
     if (v.valid) {
