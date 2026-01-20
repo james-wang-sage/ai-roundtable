@@ -63,6 +63,7 @@ let debateState = {
 
 // Track polling interval for cleanup
 let verdictPollingInterval = null;
+let verdictPollingInFlight = false;  // 防止异步轮询重叠
 
 // Cleanup function to stop polling and reset state
 function cleanupVerdictPolling() {
@@ -70,6 +71,31 @@ function cleanupVerdictPolling() {
     clearInterval(verdictPollingInterval);
     verdictPollingInterval = null;
   }
+  verdictPollingInFlight = false;
+}
+
+// 标记检测辅助函数：容忍空格和变体
+function hasVerdictMarkers(text) {
+  if (!text) return false;
+  // 标准化：移除多余空格，统一全角/半角
+  const normalized = text
+    .replace(/\s+/g, '')  // 移除所有空格
+    .replace(/＜/g, '<')   // 全角转半角
+    .replace(/＞/g, '>')
+    .replace(/《/g, '<')
+    .replace(/》/g, '>');
+
+  // 检测新格式标记
+  const hasNewFormat = (
+    normalized.includes('<<<辩论技巧>>>') ||
+    normalized.includes('<<<事实裁决>>>') ||
+    normalized.includes('<<<风险提示>>>')
+  );
+
+  // 检测旧格式标记
+  const hasOldFormat = normalized.includes('===审计结果===');
+
+  return hasNewFormat || hasOldFormat;
 }
 
 // URL detection for source verification
@@ -210,6 +236,12 @@ async function startDebate() {
 2. 每个关键论据必须附上来源URL
 3. 格式：[论据内容] (来源: URL)
 
+【论据数量要求 - 全面覆盖】
+⚠️ 至少提供 3 条论据，没有上限！
+✅ 尽可能多收集有利于你立场的事实和数据
+✅ 全面覆盖：经济/技术/政策/市场/历史等多个维度
+❌ 避免遗漏：漏掉的有利事实可能被对方利用
+
 【来源质量要求 - 区分一手与二手】
 ⚠️ 审计时会严格区分来源等级，影响最终得分！
 ✅ 一手来源（高信度）：官方报告、论文、政府数据、公司IR公告、权威机构原文
@@ -223,10 +255,10 @@ async function startDebate() {
 
 请进行立论陈述。要求：
 1. 明确阐述你的核心观点
-2. 提供至少 3 个论据，优先使用一手来源，每个论据必须有URL
+2. 提供至少 3 个论据（越多越好），优先使用一手来源，每个论据必须有URL
 3. 【关键】必须包含"推理/分析"段落，解释这些论据如何相互支持、共同指向你的结论
 4. 逻辑清晰，论证有力
-5. 篇幅控制在 300-500 字
+5. 篇幅不设上限，内容为王
 
 ⚠️ 无来源的论据将被视为无效！
 ⚠️ 仅罗列论据而无思考整合，将严重扣分！
@@ -541,6 +573,12 @@ ${opposingResponse}
 2. 新论据必须附上URL来源
 3. 指出对方来源的问题（如有）
 
+【论据补充 - 全面出击】
+⚠️ 不要只防守！主动补充新论据加强你的立场
+✅ 搜集对方遗漏或忽视的有利事实
+✅ 每轮至少补充 1-2 个新论据（带URL）
+✅ 覆盖对方未涉及的角度（政策/技术/历史等）
+
 【来源质量审计 - 攻击对方弱点】
 审计时会严格区分来源等级！你可以攻击对方的来源质量：
 - 对方使用"二手转述"而非一手来源？指出！
@@ -557,8 +595,9 @@ ${opposingResponse}
 1. 回应对方的攻辩问题（如有）
 2. 验证并质疑对方引用的来源
 3. 用有URL来源的一手数据反驳对方
-4. 【关键】必须包含"分析/推理"段落
-5. 篇幅控制在 300-500 字
+4. 补充新论据加强你的立场
+5. 【关键】必须包含"分析/推理"段落
+6. 篇幅不设上限，内容为王
 
 ⚠️ 无来源的论据将被视为无效！`;
   }
@@ -758,8 +797,14 @@ ${'='.repeat(50)}
 
   log(`[审计] 裁判 ${capitalize(judge)} 正在进行尽职调查...`);
 
-  // Send to the selected judge
-  await sendToAI(judge, getVerdictPrompt(judge));
+  // Send to the selected judge - 检查是否成功
+  const sendResult = await sendToAI(judge, getVerdictPrompt(judge));
+  if (!sendResult) {
+    log(`[审计] ❌ 无法向 ${capitalize(judge)} 发送审计请求，请检查该AI标签页是否打开`, 'error');
+    updateDebateStatus('ready', '发送失败，请重试');
+    document.getElementById('request-verdict-btn').disabled = false;
+    return;
+  }
 
   // Clear any existing polling before starting new one
   cleanupVerdictPolling();
@@ -767,29 +812,55 @@ ${'='.repeat(50)}
   // Wait for verdict with polling
   let attempts = 0;
   const maxAttempts = 300; // 10 minutes max (300 * 2s = 600s) - AI needs time for deep analysis with web search
+  let consecutiveErrors = 0;  // 跟踪连续错误
 
   verdictPollingInterval = setInterval(async () => {
+    // 防止异步重叠：如果上一个 tick 还在执行，跳过
+    if (verdictPollingInFlight) {
+      return;
+    }
+
     // Safety check: stop if debate was reset during polling
     if (!debateState.active) {
       cleanupVerdictPolling();
       return;
     }
 
+    verdictPollingInFlight = true;
     attempts++;
 
-    const response = await getLatestResponse(judge);
-    // 检测新格式 (<<<辩论技巧>>>) 或旧格式 (===审计结果===)
-    const hasNewFormat = response && response.includes('<<<辩论技巧>>>');
-    const hasOldFormat = response && response.includes('===审计结果===');
-    if (hasNewFormat || hasOldFormat) {
-      debateState.verdict = response;
-      log(`[审计] ${capitalize(judge)} 已提交审计报告`, 'success');
-      cleanupVerdictPolling();
-      processSingleJudgeVerdict(judge, response);
-      return;
-    }
+    try {
+      const response = await getLatestResponse(judge);
 
-    updateDebateStatus('waiting', `等待 ${capitalize(judge)} 的审计报告...`);
+      // 检测错误或空响应
+      if (response === null || response === undefined) {
+        consecutiveErrors++;
+        if (consecutiveErrors >= 5) {
+          log(`[审计] ⚠️ 连续 ${consecutiveErrors} 次无法获取 ${capitalize(judge)} 的响应`, 'error');
+        }
+        verdictPollingInFlight = false;
+        return;
+      }
+
+      consecutiveErrors = 0;  // 重置错误计数
+
+      // 使用容错的标记检测
+      if (hasVerdictMarkers(response)) {
+        debateState.verdict = response;
+        log(`[审计] ${capitalize(judge)} 已提交审计报告`, 'success');
+        cleanupVerdictPolling();
+        processSingleJudgeVerdict(judge, response);
+        return;
+      }
+
+      updateDebateStatus('waiting', `等待 ${capitalize(judge)} 的审计报告... (${attempts}/${maxAttempts})`);
+
+    } catch (error) {
+      log(`[审计] 轮询错误: ${error.message}`, 'error');
+      consecutiveErrors++;
+    } finally {
+      verdictPollingInFlight = false;
+    }
 
     // Timeout
     if (attempts >= maxAttempts) {
